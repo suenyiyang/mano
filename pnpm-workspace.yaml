@@ -29,4 +29,4 @@ catalog:
 
   # Testing
   vitest: ^4.1.2
-  zod: ^3.24.0
+  zod: ^3.25.76

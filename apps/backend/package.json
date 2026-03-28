@@ -14,12 +14,19 @@
   "dependencies": {
     "@hono/node-server": "catalog:",
     "@mano/agent": "workspace:*",
-    "hono": "catalog:"
+    "bcrypt": "^6.0.0",
+    "drizzle-orm": "^0.45.2",
+    "hono": "catalog:",
+    "jose": "^6.2.2",
+    "postgres": "^3.4.8",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@hono/vite-build": "catalog:",
     "@hono/vite-dev-server": "catalog:",
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.31.10",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
