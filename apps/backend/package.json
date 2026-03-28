@@ -7,18 +7,21 @@
     "dev": "vite dev",
     "build": "vite build",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "hono": "catalog:",
     "@hono/node-server": "catalog:",
-    "@mano/agent": "workspace:*"
+    "@mano/agent": "workspace:*",
+    "hono": "catalog:"
   },
   "devDependencies": {
-    "vite": "catalog:",
     "@hono/vite-build": "catalog:",
     "@hono/vite-dev-server": "catalog:",
     "@types/node": "^22.0.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

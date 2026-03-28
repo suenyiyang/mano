@@ -24,5 +24,10 @@ Thumbs.db
 # Logs
 *.log
 
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+
 # pnpm
 .pnpm-debug.log
