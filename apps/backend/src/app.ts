@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import type { Db } from "./db/index.js";
+import { createDb, type Db } from "./db/index.js";
+import { getEnv } from "./env.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { requestId } from "./middleware/request-id.js";
 import { attachmentRoutes } from "./routes/attachments.js";
@@ -25,6 +26,13 @@ const app = new Hono<AppEnv>();
 // Global middleware
 app.use("/api/*", requestId);
 app.use("/api/*", errorHandler);
+
+// DB middleware — must be before routes
+const db = createDb(getEnv().DATABASE_URL);
+app.use("/api/*", async (c, next) => {
+  c.set("db", db);
+  await next();
+});
 
 // Routes
 app.route("/api", healthRoutes);
