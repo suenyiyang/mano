@@ -1,5 +1,6 @@
 import { type FC, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSidebar } from "../contexts/sidebar-context.js";
 import { cn } from "../lib/utils.js";
 import { McpServersPage } from "./settings/mcp-servers-page.js";
 import { ModelTiersPage } from "./settings/model-tiers-page.js";
@@ -17,11 +18,17 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
 
 export const SettingsPage: FC = () => {
   const { t } = useTranslation();
+  const { isOpen } = useSidebar();
   const [activeTab, setActiveTab] = useState<Tab>("skills");
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex h-12 shrink-0 items-center px-5 text-sm font-medium text-[var(--fg)]">
+      <div
+        className={cn(
+          "flex h-12 shrink-0 items-center px-5 text-sm font-medium text-[var(--fg)]",
+          !isOpen && "pl-12",
+        )}
+      >
         {t("settings.title")}
       </div>
       <div className="flex-1 overflow-y-auto px-6 py-4">

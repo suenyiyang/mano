@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { GitFork, MoreHorizontal, Pencil, Share2, Trash2 } from "lucide-react";
 import { type FC, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSidebar } from "../../contexts/sidebar-context.js";
+import { cn } from "../../lib/utils.js";
 import { apiClient } from "../../services/api-client.js";
 import {
   DropdownMenu,
@@ -32,6 +34,7 @@ interface TierInfo {
 
 export const Topbar: FC<TopbarProps> = (props) => {
   const { t } = useTranslation();
+  const { isOpen } = useSidebar();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(props.title);
 
@@ -53,7 +56,7 @@ export const Topbar: FC<TopbarProps> = (props) => {
   };
 
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between px-5">
+    <div className={cn("flex h-12 shrink-0 items-center justify-between px-5", !isOpen && "pl-12")}>
       <div className="text-sm font-medium text-[var(--fg)]">
         {isRenaming ? (
           <Input

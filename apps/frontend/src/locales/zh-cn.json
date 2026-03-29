@@ -51,6 +51,8 @@
 
   "sidebar.newChat": "新对话",
   "sidebar.searchPlaceholder": "搜索...",
+  "sidebar.open": "打开侧边栏",
+  "sidebar.close": "收起侧边栏",
   "sidebar.user": "用户",
 
   "sessionList.empty": "还没有对话",

@@ -51,6 +51,8 @@
 
   "sidebar.newChat": "New chat",
   "sidebar.searchPlaceholder": "Search...",
+  "sidebar.open": "Open sidebar",
+  "sidebar.close": "Close sidebar",
   "sidebar.user": "User",
 
   "sessionList.empty": "No conversations yet",

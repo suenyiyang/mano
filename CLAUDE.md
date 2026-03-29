@@ -34,6 +34,10 @@ Monorepo with pnpm workspaces:
 - Prefer `const fn = () => {}` over `function fn() {}`
 - Biome enforces: double quotes, semicolons, 2-space indent, 100-char line width, organized imports
 
+## Testing
+
+Always add or update corresponding tests when changing code. Frontend uses Playwright E2E tests (`apps/frontend/e2e/`); backend and agent use Vitest unit tests.
+
 ## Frontend Component & Hook Patterns
 
 Hooks: `useXxxLogic` with `UseXxxLogicProps` interface.
