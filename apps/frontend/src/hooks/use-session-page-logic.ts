@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { apiClient } from "../services/api-client.js";
 import { createSseClient } from "../services/sse-client.js";
 import type { ActiveGeneration, Session } from "../types/api.js";
@@ -17,6 +17,8 @@ interface UseSessionPageLogicProps {
 
 export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const initialMessageSent = useRef(false);
   const resumeAttempted = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,6 +54,82 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   );
 
   const chatInputProps = useChatInputLogic(handleSend);
+
+  // ─── Topbar actions ───────────────────────────────────────────────────
+
+  const renameMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const { data } = await apiClient.post<{ session: Session }>(
+        `/sessions/${props.sessionId}/update`,
+        { title },
+      );
+      return data.session;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["session", props.sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+
+  const forkMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post<{ session: Session }>(
+        `/sessions/${props.sessionId}/fork`,
+      );
+      return data.session;
+    },
+    onSuccess: (forked) => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      navigate(`/app/${forked.id}`);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiClient.post(`/sessions/${props.sessionId}/delete`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      navigate("/app");
+    },
+  });
+
+  const modelTierMutation = useMutation({
+    mutationFn: async (modelTier: string) => {
+      const { data } = await apiClient.post<{ session: Session }>(
+        `/sessions/${props.sessionId}/update`,
+        { modelTier },
+      );
+      return data.session;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["session", props.sessionId] });
+    },
+  });
+
+  // ─── Ask user / HITL respond ──────────────────────────────────────────
+
+  const handleAskUserAnswer = useCallback(
+    async (answer: string) => {
+      if (!streamingState.askUser || !streamingState.responseId) return;
+      try {
+        await apiClient.post(`/sessions/${props.sessionId}/chat/respond`, {
+          responseId: streamingState.responseId,
+          toolCallId: streamingState.askUser.toolCallId,
+          type: "ask_user_answer",
+          payload: { answer },
+        });
+        dispatch({ type: "CLEAR_ASK_USER" });
+      } catch {
+        // Best-effort
+      }
+    },
+    [props.sessionId, streamingState.askUser, streamingState.responseId, dispatch],
+  );
+
+  const handleAskUserClose = useCallback(() => {
+    dispatch({ type: "CLEAR_ASK_USER" });
+  }, [dispatch]);
 
   // Handle initial message from new chat navigation
   useEffect(() => {
@@ -104,8 +182,18 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     resume();
   }, [props.sessionId, dispatch, streamingState.isStreaming]);
 
+  const session = sessionQuery.data ?? null;
+
   return {
-    session: sessionQuery.data ?? null,
+    session,
+    topbarProps: {
+      title: session?.title ?? "Untitled",
+      currentTier: session?.modelTier ?? "pro",
+      onRename: (title: string) => renameMutation.mutate(title),
+      onFork: () => forkMutation.mutate(),
+      onDelete: () => deleteMutation.mutate(),
+      onModelTierChange: (tier: string) => modelTierMutation.mutate(tier),
+    },
     messageListProps: {
       turns: messageList.turns,
       streamingBlocks: streamingState.contentBlocks,
@@ -121,7 +209,13 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
       maxWidth: "720px",
     },
     streamingError: streamingState.error,
-    askUser: streamingState.askUser,
+    askUserDialogProps: {
+      open: streamingState.askUser !== null,
+      question: streamingState.askUser?.question ?? "",
+      options: streamingState.askUser?.options,
+      onAnswer: handleAskUserAnswer,
+      onClose: handleAskUserClose,
+    },
   };
 };
 

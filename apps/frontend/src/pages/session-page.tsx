@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import { useParams } from "react-router";
 import { ChatInput } from "../components/chat/chat-input.js";
+import { AskUserDialog } from "../components/session/ask-user-dialog.js";
 import { MessageList } from "../components/session/message-list.js";
 import { Topbar } from "../components/session/topbar.js";
 import { useSessionPageLogic } from "../hooks/use-session-page-logic.js";
@@ -14,7 +15,7 @@ export const SessionPage: FC = () => {
 
   return (
     <>
-      <Topbar title={pageLogic.session?.title ?? "Untitled"} />
+      <Topbar {...pageLogic.topbarProps} />
       <MessageList {...pageLogic.messageListProps} />
       {pageLogic.streamingError && (
         <div className="px-6 py-2 text-center text-sm text-red-500">{pageLogic.streamingError}</div>
@@ -22,6 +23,7 @@ export const SessionPage: FC = () => {
       <div className="flex justify-center px-6 py-3.5">
         <ChatInput {...pageLogic.chatInputProps} />
       </div>
+      <AskUserDialog {...pageLogic.askUserDialogProps} />
     </>
   );
 };

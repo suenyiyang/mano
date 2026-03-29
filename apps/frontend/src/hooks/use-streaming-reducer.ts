@@ -41,7 +41,8 @@ export type StreamingAction =
   | { type: "MESSAGE_COMPLETE"; message: Message }
   | { type: "DONE"; usage: TokenUsage }
   | { type: "ERROR"; error: string }
-  | { type: "RESET" };
+  | { type: "RESET" }
+  | { type: "CLEAR_ASK_USER" };
 
 // ─── Reducer ───────────────────────────────────────────────────────────────
 
@@ -137,6 +138,9 @@ export const streamingReducer = (
         isStreaming: false,
         error: action.error,
       };
+
+    case "CLEAR_ASK_USER":
+      return { ...state, askUser: null };
 
     case "RESET":
       return initialState;
