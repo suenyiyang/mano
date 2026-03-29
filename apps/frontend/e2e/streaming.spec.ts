@@ -1,0 +1,404 @@
+import type { Page, Route } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { mockEmptyMessages, mockSessionDetail, setupAuthenticated } from "./helpers.js";
+
+// ─── SSE helpers ──────────────────────────────────────────────────────────
+
+/** Format a single SSE event line */
+const sseEvent = (event: string, data: object): string =>
+  `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+
+/** Build an SSE body from events */
+const sseBody = (...events: Array<{ event: string; data: object }>): string =>
+  events.map((e) => sseEvent(e.event, e.data)).join("");
+
+const responseStart = (responseId: string) => ({
+  event: "response_start",
+  data: { type: "response_start", responseId },
+});
+
+const textDelta = (text: string) => ({
+  event: "text_delta",
+  data: { type: "text_delta", text },
+});
+
+const toolCallStart = (toolCallId: string, name: string) => ({
+  event: "tool_call_start",
+  data: { type: "tool_call_start", toolCallId, name },
+});
+
+const toolCallDelta = (toolCallId: string, argumentsDelta: string) => ({
+  event: "tool_call_delta",
+  data: { type: "tool_call_delta", toolCallId, argumentsDelta },
+});
+
+const toolCallEnd = (toolCallId: string) => ({
+  event: "tool_call_end",
+  data: { type: "tool_call_end", toolCallId },
+});
+
+const toolResult = (toolCallId: string, content: string, isError = false) => ({
+  event: "tool_result",
+  data: { type: "tool_result", toolCallId, content, isError },
+});
+
+const done = () => ({
+  event: "done",
+  data: { type: "done", usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
+});
+
+const sseError = (error: string, code: string) => ({
+  event: "error",
+  data: { type: "error", error, code },
+});
+
+/** Mock no active generation for a session */
+const mockNoActiveGeneration = async (page: Page) => {
+  await page.route("**/api/sessions/*/chat/active", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ active: false }),
+    }),
+  );
+};
+
+/** Fulfill a route with SSE events (streaming still "in progress" — no DONE) */
+const fulfillSseStream = (route: Route, ...events: Array<{ event: string; data: object }>) =>
+  route.fulfill({
+    status: 200,
+    contentType: "text/event-stream",
+    body: sseBody(...events),
+  });
+
+// ─── Send message and SSE streaming ───────────────────────────────────────
+
+test.describe("Send message and SSE streaming", () => {
+  test.beforeEach(async ({ page }) => {
+    await setupAuthenticated(page, [{ id: "s1", title: "Test Session" }]);
+    await mockSessionDetail(page, "s1", "Test Session");
+    await mockEmptyMessages(page);
+    await mockNoActiveGeneration(page);
+  });
+
+  test("sends a message and streams text response", async ({ page }) => {
+    await page.route("**/api/sessions/s1/chat/send", (route) =>
+      fulfillSseStream(route, responseStart("r1"), textDelta("Hello! I can help you with that.")),
+    );
+
+    await page.goto("/app/s1");
+    const textarea = page.getByPlaceholder("Send a follow-up...");
+    await textarea.fill("Help me build something");
+    await textarea.press("Enter");
+
+    // Streamed text appears in a live agent message
+    await expect(page.getByText("Hello! I can help you with that.")).toBeVisible();
+    // Agent header with avatar
+    await expect(page.locator("main").getByText("Mano", { exact: true })).toBeVisible();
+  });
+
+  test("streams a response with tool calls", async ({ page }) => {
+    await page.route("**/api/sessions/s1/chat/send", (route) =>
+      fulfillSseStream(
+        route,
+        responseStart("r1"),
+        textDelta("Let me write that file."),
+        toolCallStart("tc1", "write_file"),
+        toolCallDelta("tc1", '{"path":"index.html"}'),
+        toolCallEnd("tc1"),
+        toolResult("tc1", "File written successfully"),
+        textDelta("Done! File created."),
+      ),
+    );
+
+    await page.goto("/app/s1");
+    const textarea = page.getByPlaceholder("Send a follow-up...");
+    await textarea.fill("Write an HTML file");
+    await textarea.press("Enter");
+
+    await expect(page.getByText("Let me write that file.")).toBeVisible();
+    await expect(page.getByText("write_file")).toBeVisible();
+    await expect(page.getByText("Done! File created.")).toBeVisible();
+  });
+
+  test("shows stop button while streaming", async ({ page }) => {
+    // Stream with no DONE — isStreaming stays true
+    await page.route("**/api/sessions/s1/chat/send", (route) =>
+      fulfillSseStream(route, responseStart("r1"), textDelta("Working on it...")),
+    );
+
+    await page.goto("/app/s1");
+    const textarea = page.getByPlaceholder("Send a follow-up...");
+    await textarea.fill("Do something");
+    await textarea.press("Enter");
+
+    // Stop button should appear during streaming
+    await expect(page.getByTitle("Stop generating")).toBeVisible();
+    // Streaming content visible
+    await expect(page.getByText("Working on it...")).toBeVisible();
+  });
+
+  test("send button returns after stream completes", async ({ page }) => {
+    // Include DONE so streaming completes
+    await page.route("**/api/sessions/s1/chat/send", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sseBody(responseStart("r1"), textDelta("Finished."), done()),
+      }),
+    );
+
+    await page.goto("/app/s1");
+    const textarea = page.getByPlaceholder("Send a follow-up...");
+    await textarea.fill("Quick task");
+    await textarea.press("Enter");
+
+    // After stream completes, stop button should not be present
+    await expect(page.getByTitle("Stop generating")).not.toBeVisible({ timeout: 3000 });
+  });
+
+  test("displays streaming error", async ({ page }) => {
+    await page.route("**/api/sessions/s1/chat/send", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sseBody(
+          responseStart("r1"),
+          textDelta("Starting..."),
+          sseError("Rate limit exceeded", "rate_limit"),
+        ),
+      }),
+    );
+
+    await page.goto("/app/s1");
+    const textarea = page.getByPlaceholder("Send a follow-up...");
+    await textarea.fill("Trigger error");
+    await textarea.press("Enter");
+
+    await expect(page.getByText("Rate limit exceeded")).toBeVisible();
+  });
+});
+
+// ─── SSE resume on reconnect ──────────────────────────────────────────────
+
+test.describe("SSE resume on reconnect", () => {
+  test("resumes an active generation on page load", async ({ page }) => {
+    await setupAuthenticated(page, [{ id: "s1", title: "Test Session" }]);
+    await mockSessionDetail(page, "s1", "Test Session");
+    await mockEmptyMessages(page);
+
+    // Report an active generation
+    await page.route("**/api/sessions/s1/chat/active", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ active: true, responseId: "r-active" }),
+      }),
+    );
+
+    // Resume endpoint delivers remaining events (no DONE — keeps streaming visible)
+    await page.route("**/api/sessions/s1/chat/r-active/resume", (route) =>
+      fulfillSseStream(route, textDelta("Resumed content here.")),
+    );
+
+    await page.goto("/app/s1");
+
+    await expect(page.getByText("Resumed content here.")).toBeVisible();
+    // Streaming indicator should be present since generation is still active
+    await expect(page.getByTitle("Stop generating")).toBeVisible();
+  });
+
+  test("does not call resume when no active generation", async ({ page }) => {
+    await setupAuthenticated(page, [{ id: "s1", title: "Test Session" }]);
+    await mockSessionDetail(page, "s1", "Test Session");
+    await mockEmptyMessages(page);
+    await mockNoActiveGeneration(page);
+
+    let resumeCalled = false;
+    await page.route("**/api/sessions/s1/chat/*/resume", (route) => {
+      resumeCalled = true;
+      route.abort();
+    });
+
+    await page.goto("/app/s1");
+    await page.waitForTimeout(500);
+
+    expect(resumeCalled).toBe(false);
+  });
+});
+
+// ─── Session switching during streaming ───────────────────────────────────
+
+test.describe("Session switching while streaming", () => {
+  const setupTwoSessions = async (page: Page) => {
+    await setupAuthenticated(page, [
+      { id: "s1", title: "Session Alpha" },
+      { id: "s2", title: "Session Beta" },
+    ]);
+    await mockSessionDetail(page, "s1", "Session Alpha");
+    await mockSessionDetail(page, "s2", "Session Beta");
+    await mockEmptyMessages(page);
+    await mockNoActiveGeneration(page);
+  };
+
+  test("switch to another session while streaming, then switch back", async ({ page }) => {
+    await setupTwoSessions(page);
+
+    // Session 1: stream stays open (no DONE)
+    await page.route("**/api/sessions/s1/chat/send", (route) =>
+      fulfillSseStream(route, responseStart("r1"), textDelta("Alpha is thinking...")),
+    );
+
+    // Start streaming on session 1
+    await page.goto("/app/s1");
+    const textarea1 = page.getByPlaceholder("Send a follow-up...");
+    await textarea1.fill("Alpha question");
+    await textarea1.press("Enter");
+
+    await expect(page.getByText("Alpha is thinking...")).toBeVisible();
+    await expect(page.getByTitle("Stop generating")).toBeVisible();
+
+    // Switch to session 2
+    await page.locator("aside").getByText("Session Beta").click();
+    await page.waitForURL("**/app/s2");
+    await expect(page.locator("main").getByText("Session Beta")).toBeVisible();
+
+    // Session 2 should not show session 1's content
+    await expect(page.getByText("Alpha is thinking...")).not.toBeVisible();
+    // Session 2 is not streaming — no stop button
+    await expect(page.getByTitle("Stop generating")).not.toBeVisible();
+
+    // Send message on session 2
+    await page.route("**/api/sessions/s2/chat/send", (route) =>
+      fulfillSseStream(route, responseStart("r2"), textDelta("Beta response here.")),
+    );
+
+    const textarea2 = page.getByPlaceholder("Send a follow-up...");
+    await textarea2.fill("Beta question");
+    await textarea2.press("Enter");
+
+    await expect(page.getByText("Beta response here.")).toBeVisible();
+    await expect(page.getByTitle("Stop generating")).toBeVisible();
+
+    // Switch back to session 1 — mock active generation for resume
+    await page.route("**/api/sessions/s1/chat/active", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ active: true, responseId: "r1" }),
+      }),
+    );
+
+    // Mock resume endpoint for session 1
+    await page.route("**/api/sessions/s1/chat/r1/resume", (route) =>
+      fulfillSseStream(route, textDelta("Alpha resumed.")),
+    );
+
+    await page.locator("aside").getByText("Session Alpha").click();
+    await page.waitForURL("**/app/s1");
+
+    // Should see resumed streaming content (not session 2's content)
+    await expect(page.getByText("Alpha resumed.")).toBeVisible();
+    await expect(page.getByText("Beta response here.")).not.toBeVisible();
+    await expect(page.getByTitle("Stop generating")).toBeVisible();
+  });
+
+  test("each session has independent streaming state", async ({ page }) => {
+    await setupTwoSessions(page);
+
+    // Session 1: completes immediately (with DONE)
+    await page.route("**/api/sessions/s1/chat/send", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sseBody(responseStart("r1"), textDelta("Alpha done instantly."), done()),
+      }),
+    );
+
+    // Mock messages for session 1 — returned after refetch
+    await page.route("**/api/sessions/s1/messages/list*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          messages: [
+            {
+              id: "m1",
+              sessionId: "s1",
+              role: "user",
+              content: "Quick question",
+              toolCalls: null,
+              toolCallId: null,
+              toolName: null,
+              ordinal: 1,
+              modelId: null,
+              responseId: null,
+              tokenUsage: null,
+              isCompacted: false,
+              createdAt: "2025-01-01T14:30:00Z",
+            },
+            {
+              id: "m2",
+              sessionId: "s1",
+              role: "assistant",
+              content: "Alpha done instantly.",
+              toolCalls: null,
+              toolCallId: null,
+              toolName: null,
+              ordinal: 2,
+              modelId: "doubao-seed",
+              responseId: "r1",
+              tokenUsage: null,
+              isCompacted: false,
+              createdAt: "2025-01-01T14:30:05Z",
+            },
+          ],
+          nextCursor: null,
+        }),
+      }),
+    );
+
+    await page.goto("/app/s1");
+    const textarea = page.getByPlaceholder("Send a follow-up...");
+    await textarea.fill("Quick question");
+    await textarea.press("Enter");
+
+    // Stream completed — persisted message visible from refetch
+    await expect(page.getByText("Alpha done instantly.")).toBeVisible();
+    await expect(page.getByTitle("Stop generating")).not.toBeVisible();
+
+    // Session 2: still streaming (no DONE)
+    await page.route("**/api/sessions/s2/chat/send", (route) =>
+      fulfillSseStream(
+        route,
+        responseStart("r2"),
+        textDelta("Beta working..."),
+        toolCallStart("tc1", "write_file"),
+        toolCallDelta("tc1", '{"path":"app.tsx"}'),
+        toolCallEnd("tc1"),
+      ),
+    );
+
+    // Switch to session 2
+    await page.locator("aside").getByText("Session Beta").click();
+    await page.waitForURL("**/app/s2");
+
+    const textarea2 = page.getByPlaceholder("Send a follow-up...");
+    await textarea2.fill("Build a file");
+    await textarea2.press("Enter");
+
+    // Session 2 shows its streaming content
+    await expect(page.getByText("Beta working...")).toBeVisible();
+    await expect(page.getByText("write_file")).toBeVisible();
+    await expect(page.getByTitle("Stop generating")).toBeVisible();
+
+    // Switch back to session 1 — should not show session 2's content
+    await page.locator("aside").getByText("Session Alpha").click();
+    await page.waitForURL("**/app/s1");
+
+    await expect(page.getByText("Alpha done instantly.")).toBeVisible();
+    await expect(page.getByText("write_file")).not.toBeVisible();
+    await expect(page.getByText("Beta working...")).not.toBeVisible();
+    await expect(page.getByTitle("Stop generating")).not.toBeVisible();
+  });
+});

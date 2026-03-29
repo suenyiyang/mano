@@ -9,7 +9,7 @@ test.describe("Settings page (/app/settings)", () => {
   test("renders settings page with tabs", async ({ page }) => {
     await page.goto("/app/settings");
 
-    await expect(page.getByText("Settings")).toBeVisible();
+    await expect(page.getByRole("main").getByText("Settings")).toBeVisible();
     await expect(page.getByRole("button", { name: "Skills" })).toBeVisible();
     await expect(page.getByRole("button", { name: "MCP Servers" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Model Tiers" })).toBeVisible();
@@ -57,7 +57,7 @@ test.describe("Settings page (/app/settings)", () => {
 
     await page.goto("/app/settings");
 
-    await expect(page.getByText("Code Review")).toBeVisible();
+    await expect(page.getByText("Code Review", { exact: true })).toBeVisible();
     await expect(page.getByText("code-review")).toBeVisible();
     await expect(page.getByText("Automated code review assistant")).toBeVisible();
   });
@@ -181,7 +181,7 @@ test.describe("Settings page (/app/settings)", () => {
     await page.getByRole("button", { name: "Model Tiers" }).click();
 
     await expect(page.getByText("pro")).toBeVisible();
-    await expect(page.getByText("GPT-4o")).toBeVisible();
+    await expect(page.getByText("GPT-4o", { exact: true })).toBeVisible();
     await expect(page.getByText("openai")).toBeVisible();
     await expect(page.getByText("30 req/min")).toBeVisible();
   });
