@@ -1,5 +1,6 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { StructuredToolInterface } from "@langchain/core/tools";
+import type { BackendProtocol } from "deepagents";
 import type { AgentMiddleware } from "langchain";
 
 export type ModelProvider = "volcengine" | "openai" | "anthropic";
@@ -30,4 +31,10 @@ export interface ManoAgentConfig {
   systemPrompt?: string;
   tools?: StructuredToolInterface[];
   middleware?: AgentMiddleware[];
+  /**
+   * DeepAgents filesystem backend.
+   * Pass a Sandbox's `backend` property for sandboxed execution.
+   * If omitted, DeepAgents uses its default StateBackend (in-memory).
+   */
+  backend?: BackendProtocol;
 }

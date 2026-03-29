@@ -1,7 +1,13 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { BaseMessage } from "@langchain/core/messages";
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import type { AskUserResolver, ModelConfig, ModelProvider, SkillResolver } from "@mano/agent";
+import type {
+  AskUserResolver,
+  ModelConfig,
+  ModelProvider,
+  Sandbox,
+  SkillResolver,
+} from "@mano/agent";
 import {
   createAskUserMiddleware,
   createManoAgent,
@@ -84,13 +90,19 @@ export interface CreateAgentOptions {
   db: Db;
   userId: string;
   askUserResolver?: AskUserResolver;
+  /**
+   * Optional sandbox for filesystem/exec operations and MCP stdio servers.
+   * When provided, the agent's filesystem tools operate inside the sandbox,
+   * and MCP stdio servers are spawned inside it.
+   */
+  sandbox?: Sandbox;
 }
 
 /**
  * Create a fully configured agent with all middleware for a session.
  */
 export const createAgentForSession = async (options: CreateAgentOptions) => {
-  const { model, systemPrompt, db, userId, askUserResolver } = options;
+  const { model, systemPrompt, db, userId, askUserResolver, sandbox } = options;
 
   const middleware: AgentMiddleware[] = [];
 
@@ -129,6 +141,7 @@ export const createAgentForSession = async (options: CreateAgentOptions) => {
           url: config.url ?? undefined,
           env: (config.env as Record<string, string>) ?? undefined,
         })),
+        sandbox,
       });
       middleware.push(mcpResult.middleware);
       mcpManager = mcpResult.mcpManager;
@@ -140,7 +153,12 @@ export const createAgentForSession = async (options: CreateAgentOptions) => {
   // Tool search middleware — should be last so it can discover all other tools
   middleware.push(createToolSearchMiddleware());
 
-  const agent = createManoAgent({ model, middleware, systemPrompt });
+  const agent = createManoAgent({
+    model,
+    middleware,
+    systemPrompt,
+    backend: sandbox?.backend,
+  });
 
   return { agent, mcpManager };
 };

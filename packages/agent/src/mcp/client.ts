@@ -5,6 +5,8 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { z } from "zod";
+import type { Sandbox } from "../sandbox/types.js";
+import { SandboxStdioTransport } from "./sandbox-stdio-transport.js";
 
 export interface McpServerConfig {
   name: string;
@@ -22,9 +24,18 @@ interface ConnectedServer {
 
 /**
  * Manages connections to MCP servers and converts their tools to LangChain format.
+ *
+ * When a `sandbox` is provided, stdio MCP servers are spawned inside the sandbox
+ * instead of on the local machine. SSE and streamable-http servers always connect
+ * directly (they don't need process spawning).
  */
 export class McpClientManager {
   private servers = new Map<string, ConnectedServer>();
+  private sandbox?: Sandbox;
+
+  constructor(options?: { sandbox?: Sandbox }) {
+    this.sandbox = options?.sandbox;
+  }
 
   /**
    * Connect to an MCP server and register its tools.
@@ -88,6 +99,17 @@ export class McpClientManager {
         if (!config.command) {
           throw new Error(`MCP server "${config.name}" requires a command for stdio transport`);
         }
+
+        // When a sandbox is available, spawn MCP stdio servers inside it
+        if (this.sandbox) {
+          const sandbox = this.sandbox;
+          return new SandboxStdioTransport({
+            command: config.command,
+            args: config.args,
+            spawn: (cmd, args) => sandbox.spawn(cmd, args),
+          });
+        }
+
         return new StdioClientTransport({
           command: config.command,
           args: config.args,

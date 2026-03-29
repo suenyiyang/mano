@@ -20,6 +20,15 @@ export {
   webSearchMiddleware,
 } from "./middleware/index.js";
 export { createModel } from "./providers/index.js";
+// Sandbox
+export type {
+  LocalSandboxOptions,
+  Sandbox,
+  SandboxConfig,
+  SandboxProcess,
+  SandboxProvider,
+} from "./sandbox/index.js";
+export { isSandbox, LocalSandboxProvider } from "./sandbox/index.js";
 export type {
   AnthropicModelConfig,
   ManoAgentConfig,

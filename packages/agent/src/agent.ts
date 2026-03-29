@@ -7,5 +7,6 @@ export const createManoAgent = (config: ManoAgentConfig) => {
     tools: config.tools ?? [],
     middleware: config.middleware ?? [],
     systemPrompt: config.systemPrompt,
+    backend: config.backend,
   });
 };

@@ -1,6 +1,7 @@
 import { createMiddleware, SystemMessage } from "langchain";
 import type { McpServerConfig } from "../mcp/index.js";
 import { McpClientManager } from "../mcp/index.js";
+import type { Sandbox } from "../sandbox/types.js";
 
 const MCP_SYSTEM_PROMPT = `## MCP Tools
 
@@ -12,6 +13,11 @@ export interface McpMiddlewareOptions {
    * Tools from all connected servers will be available to the agent.
    */
   servers: McpServerConfig[];
+  /**
+   * Optional sandbox for running MCP stdio servers.
+   * When provided, stdio MCP servers are spawned inside the sandbox.
+   */
+  sandbox?: Sandbox;
 }
 
 /**
@@ -20,8 +26,8 @@ export interface McpMiddlewareOptions {
  * returned mcpManager reference for cleanup.
  */
 export const createMcpMiddleware = (options: McpMiddlewareOptions) => {
-  const { servers } = options;
-  const mcpManager = new McpClientManager();
+  const { servers, sandbox } = options;
+  const mcpManager = new McpClientManager({ sandbox });
 
   // We need to connect synchronously with the middleware creation,
   // but MCP connection is async. The tools will be loaded in beforeAgent.
