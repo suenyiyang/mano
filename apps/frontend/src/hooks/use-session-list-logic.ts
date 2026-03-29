@@ -42,6 +42,20 @@ export const useSessionListLogic = () => {
     },
   });
 
+  const renameSessionMutation = useMutation({
+    mutationFn: async (input: { sessionId: string; title: string }) => {
+      const { data } = await apiClient.post<{ session: Session }>(
+        `/sessions/${input.sessionId}/update`,
+        { title: input.title },
+      );
+      return data.session;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["session", variables.sessionId] });
+    },
+  });
+
   const deleteSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
       await apiClient.post(`/sessions/${sessionId}/delete`);
@@ -55,6 +69,10 @@ export const useSessionListLogic = () => {
     navigate("/app");
   }, [navigate]);
 
+  const handleOpenSettings = useCallback(() => {
+    navigate("/app/settings");
+  }, [navigate]);
+
   return {
     sessions: filteredSessions,
     search,
@@ -64,7 +82,9 @@ export const useSessionListLogic = () => {
     isFetchingNextPage: query.isFetchingNextPage,
     isLoading: query.isLoading,
     createSessionMutation,
+    renameSessionMutation,
     deleteSessionMutation,
     handleNewChat,
+    handleOpenSettings,
   };
 };

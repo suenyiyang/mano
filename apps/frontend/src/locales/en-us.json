@@ -56,6 +56,9 @@
   "sidebar.user": "User",
 
   "sessionList.empty": "No conversations yet",
+  "sessionList.rename": "Rename",
+  "sessionList.deleteTitle": "Delete conversation",
+  "sessionList.deleteDescription": "Are you sure you want to delete \"{{title}}\"? This action cannot be undone.",
 
   "agentMessage.name": "Mano",
 

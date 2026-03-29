@@ -124,6 +124,15 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
     responseId,
   });
 
+  // Validate model availability BEFORE starting SSE stream
+  const models = await findEnabledModelsByTier(db, session.modelTier);
+  if (models.length === 0) {
+    await updateGenerationStatus(db, responseId, "failed");
+    throw badRequest(`No enabled models for tier "${session.modelTier}"`);
+  }
+  const modelRow = pickModel(models);
+  const model = createModelInstance(modelRow);
+
   // Set up abort controller and emitter for resume
   const controller = new AbortController();
   activeControllers.set(responseId, controller);
@@ -138,14 +147,6 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
 
     try {
       await emit("response_start", { responseId });
-
-      // Load model for this session's tier
-      const models = await findEnabledModelsByTier(db, session.modelTier);
-      if (models.length === 0) {
-        throw new Error(`No enabled models for tier "${session.modelTier}"`);
-      }
-      const modelRow = pickModel(models);
-      const model = createModelInstance(modelRow);
 
       // Create ask_user resolver that blocks until user responds via /respond
       const askUserResolver = (_question: string, _options?: string[]): Promise<string> => {

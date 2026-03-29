@@ -17,6 +17,12 @@ vi.mock("../middleware/auth.js", () => ({
   ),
 }));
 
+vi.mock("../middleware/rate-limit.js", () => ({
+  rateLimitMiddleware: vi.fn(async (_c: unknown, next: () => Promise<void>) => {
+    await next();
+  }),
+}));
+
 const mockSession = {
   id: TEST_SESSION_ID,
   userId: TEST_USER_ID,
@@ -46,6 +52,13 @@ vi.mock("../db/queries/active-generations.js", () => ({
     if (responseId === TEST_RESPONSE_ID) return mockGeneration;
     return null;
   }),
+  acquireGenerationLock: vi.fn(async () => ({
+    responseId: "resp_test",
+    sessionId: TEST_SESSION_ID,
+    status: "running",
+    startedAt: new Date(),
+    completedAt: null,
+  })),
   insertActiveGeneration: vi.fn(async () => ({})),
   updateGenerationStatus: vi.fn(async () => {}),
 }));
@@ -277,6 +290,68 @@ describe("chat/respond", () => {
     );
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe("chat/send", () => {
+  it("returns 400 when no models available for tier", async () => {
+    const app = await createTestApp();
+    const res = await app.request(
+      `/api/sessions/${TEST_SESSION_ID}/chat/send`,
+      jsonPost("", { content: "Hello" }),
+    );
+
+    // Should return HTTP 400 error, not a 200 SSE stream with error event
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("No enabled models");
+  });
+
+  it("returns 200 SSE stream when models are available", async () => {
+    const { findEnabledModelsByTier } = await import("../db/queries/models.js");
+    vi.mocked(findEnabledModelsByTier).mockResolvedValueOnce([
+      {
+        tier: "pro",
+        provider: "openai",
+        apiModelId: "gpt-4o",
+        displayName: "GPT-4o",
+        weight: 1,
+        isEnabled: true,
+        config: {},
+      },
+    ]);
+
+    const app = await createTestApp();
+    const res = await app.request(
+      `/api/sessions/${TEST_SESSION_ID}/chat/send`,
+      jsonPost("", { content: "Hello" }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+  });
+
+  it("returns 409 when generation already in progress", async () => {
+    const { acquireGenerationLock } = await import("../db/queries/active-generations.js");
+    vi.mocked(acquireGenerationLock).mockResolvedValueOnce(null);
+
+    const app = await createTestApp();
+    const res = await app.request(
+      `/api/sessions/${TEST_SESSION_ID}/chat/send`,
+      jsonPost("", { content: "Hello" }),
+    );
+
+    expect(res.status).toBe(409);
+  });
+
+  it("returns 404 for unknown session", async () => {
+    const app = await createTestApp();
+    const res = await app.request(
+      "/api/sessions/unknown/chat/send",
+      jsonPost("", { content: "Hello" }),
+    );
+
+    expect(res.status).toBe(404);
   });
 });
 

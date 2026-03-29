@@ -21,7 +21,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const initialMessageSent = useRef(false);
+  const initialMessageSent = useRef<string | null>(null);
   const resumeAttempted = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -149,19 +149,19 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     dispatch({ type: "RESET" });
     setPendingUserMessage(null);
     resumeAttempted.current = false;
-    initialMessageSent.current = false;
   }, [props.sessionId, dispatch]);
 
   // Handle initial message from new chat navigation
   useEffect(() => {
     const state = location.state as { initialMessage?: string } | null;
-    if (state?.initialMessage && !initialMessageSent.current) {
-      initialMessageSent.current = true;
+    if (state?.initialMessage && initialMessageSent.current !== props.sessionId) {
+      initialMessageSent.current = props.sessionId;
+      setPendingUserMessage(state.initialMessage);
       chatSend.send(state.initialMessage);
       // Clear the navigation state
       window.history.replaceState({}, "");
     }
-  }, [location.state, chatSend]);
+  }, [location.state, chatSend, props.sessionId]);
 
   // Resume active generation on reconnect (Phase 6.7)
   useEffect(() => {

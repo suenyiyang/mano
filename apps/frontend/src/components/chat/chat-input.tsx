@@ -41,10 +41,10 @@ export const ChatInput: FC<ChatInputProps> = (props) => {
         />
         <div className="flex items-center justify-between">
           <div className="flex gap-0.5">
-            <IconButton title={t("chatInput.attachFile")}>
+            <IconButton title={t("chatInput.attachFile")} disabled>
               <Paperclip size={15} strokeWidth={1.75} />
             </IconButton>
-            <IconButton title={t("chatInput.webSearch")}>
+            <IconButton title={t("chatInput.webSearch")} disabled>
               <Globe size={15} strokeWidth={1.75} />
             </IconButton>
           </div>
@@ -80,14 +80,21 @@ interface IconButtonProps {
   title: string;
   children: React.ReactNode;
   onClick?: () => void;
+  disabled?: boolean;
 }
 
 const IconButton: FC<IconButtonProps> = (props) => (
   <button
     type="button"
-    className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[var(--fg-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
+    className={cn(
+      "flex h-[30px] w-[30px] items-center justify-center rounded-md border-none bg-transparent text-[var(--fg-muted)] transition-all",
+      props.disabled
+        ? "cursor-default opacity-35"
+        : "cursor-pointer hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]",
+    )}
     title={props.title}
     onClick={props.onClick}
+    disabled={props.disabled}
   >
     {props.children}
   </button>

@@ -64,6 +64,12 @@ export const Sidebar: FC = () => {
         hasNextPage={sessionList.hasNextPage ?? false}
         isFetchingNextPage={sessionList.isFetchingNextPage}
         isLoading={sessionList.isLoading}
+        onRename={(sessionId, title) => {
+          sessionList.renameSessionMutation.mutate({ sessionId, title });
+        }}
+        onDelete={(sessionId) => {
+          sessionList.deleteSessionMutation.mutate(sessionId);
+        }}
       />
 
       {/* Footer */}
@@ -71,6 +77,7 @@ export const Sidebar: FC = () => {
         <button
           type="button"
           className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-[7px] text-[13px] text-[var(--fg-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
+          onClick={sessionList.handleOpenSettings}
         >
           <Settings size={15} strokeWidth={1.75} />
           <span>{t("common.settings")}</span>

@@ -1,8 +1,25 @@
-import { type FC, useEffect, useRef } from "react";
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { type FC, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { cn } from "../../lib/utils.js";
 import type { Session } from "../../types/api.js";
+import { Button } from "../ui/button.js";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog.js";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu.js";
+import { Input } from "../ui/input.js";
 
 interface SessionListProps {
   sessions: Session[];
@@ -10,12 +27,20 @@ interface SessionListProps {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   isLoading: boolean;
+  onRename: (sessionId: string, title: string) => void;
+  onDelete: (sessionId: string) => void;
 }
 
 export const SessionList: FC<SessionListProps> = (props) => {
   const { t } = useTranslation();
   const { sessionId } = useParams();
+  const navigate = useNavigate();
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
+  const [menuOpenSessionId, setMenuOpenSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -33,6 +58,29 @@ export const SessionList: FC<SessionListProps> = (props) => {
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [props.hasNextPage, props.isFetchingNextPage, props.fetchNextPage]);
+
+  const startRename = (session: Session) => {
+    setRenamingSessionId(session.id);
+    setRenameValue(session.title || "");
+  };
+
+  const handleRenameSubmit = () => {
+    if (!renamingSessionId) return;
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      props.onRename(renamingSessionId, trimmed);
+    }
+    setRenamingSessionId(null);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return;
+    props.onDelete(deleteTarget.id);
+    if (sessionId === deleteTarget.id) {
+      navigate("/app");
+    }
+    setDeleteTarget(null);
+  };
 
   if (props.isLoading) {
     return (
@@ -60,19 +108,95 @@ export const SessionList: FC<SessionListProps> = (props) => {
   return (
     <div className="flex-1 overflow-y-auto px-2 py-0.5">
       {props.sessions.map((session) => (
-        <Link
-          key={session.id}
-          to={`/app/${session.id}`}
-          className={cn(
-            "block cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-md px-2.5 py-2 text-[13px] leading-[1.4] text-[var(--fg-muted)] transition-colors",
-            "hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]",
-            sessionId === session.id && "bg-[var(--bg-active)] font-medium text-[var(--fg)]",
+        <div key={session.id} className="group relative">
+          {renamingSessionId === session.id ? (
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleRenameSubmit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleRenameSubmit();
+                if (e.key === "Escape") setRenamingSessionId(null);
+              }}
+              className="h-8 rounded-md px-2.5 text-[13px]"
+              autoFocus
+            />
+          ) : (
+            <>
+              <Link
+                to={`/app/${session.id}`}
+                className={cn(
+                  "block cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-md px-2.5 py-2 pr-8 text-[13px] leading-[1.4] text-[var(--fg-muted)] transition-colors",
+                  "hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]",
+                  sessionId === session.id && "bg-[var(--bg-active)] font-medium text-[var(--fg)]",
+                )}
+              >
+                {session.title || t("common.untitled")}
+              </Link>
+              <DropdownMenu onOpenChange={(open) => setMenuOpenSessionId(open ? session.id : null)}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[var(--fg-muted)] transition-opacity hover:bg-[var(--bg-hover)] hover:text-[var(--fg)] group-hover:opacity-100",
+                      menuOpenSessionId === session.id ? "opacity-100" : "opacity-0",
+                    )}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                  >
+                    <MoreHorizontal size={14} strokeWidth={1.75} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="right">
+                  <DropdownMenuItem onClick={() => startRename(session)}>
+                    <Pencil size={14} />
+                    {t("sessionList.rename")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setDeleteTarget(session)}
+                    className="text-red-500"
+                  >
+                    <Trash2 size={14} />
+                    {t("common.delete")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           )}
-        >
-          {session.title || t("common.untitled")}
-        </Link>
+        </div>
       ))}
       <div ref={sentinelRef} className="h-1" />
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("sessionList.deleteTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("sessionList.deleteDescription", {
+                title: deleteTarget?.title || t("common.untitled"),
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={handleDeleteConfirm}
+            >
+              {t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

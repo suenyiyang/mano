@@ -71,6 +71,62 @@ const fulfillSseStream = (route: Route, ...events: Array<{ event: string; data: 
     body: sseBody(...events),
   });
 
+// ─── Initial message deduplication ────────────────────────────────────────
+
+test.describe("Initial message from new chat", () => {
+  test("sends initial message exactly once when navigating from new chat", async ({ page }) => {
+    await setupAuthenticated(page);
+
+    // Mock session creation
+    await page.route("**/api/sessions/create", (route) =>
+      route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          session: {
+            id: "new-s1",
+            userId: "user-1",
+            title: null,
+            systemPrompt: "",
+            modelTier: "pro",
+            forkedFromSessionId: null,
+            forkedAtMessageId: null,
+            compactSummary: null,
+            compactAfterMessageId: null,
+            createdAt: "2025-01-01T00:00:00Z",
+            updatedAt: "2025-01-01T00:00:00Z",
+          },
+        }),
+      }),
+    );
+
+    await mockSessionDetail(page, "new-s1", "Untitled");
+    await mockEmptyMessages(page);
+    await mockNoActiveGeneration(page);
+
+    // Track /send request count — omit done() so streaming blocks stay visible
+    let sendCount = 0;
+    await page.route("**/api/sessions/new-s1/chat/send", (route) => {
+      sendCount++;
+      return fulfillSseStream(route, responseStart("r1"), textDelta("Got it."));
+    });
+
+    await page.goto("/app");
+    const textarea = page.getByPlaceholder("Describe your task...");
+    await textarea.fill("Build me a website");
+    await textarea.press("Enter");
+
+    // Wait for navigation to session page
+    await page.waitForURL("**/app/new-s1");
+
+    // Streamed text should appear
+    await expect(page.getByText("Got it.")).toBeVisible();
+
+    // Critical: exactly one /send request (not two from StrictMode)
+    expect(sendCount).toBe(1);
+  });
+});
+
 // ─── Send message and SSE streaming ───────────────────────────────────────
 
 test.describe("Send message and SSE streaming", () => {

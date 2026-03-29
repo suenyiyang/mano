@@ -56,6 +56,9 @@
   "sidebar.user": "用户",
 
   "sessionList.empty": "还没有对话",
+  "sessionList.rename": "重命名",
+  "sessionList.deleteTitle": "删除对话",
+  "sessionList.deleteDescription": "确定要删除「{{title}}」吗？此操作无法撤销。",
 
   "agentMessage.name": "Mano",
 
