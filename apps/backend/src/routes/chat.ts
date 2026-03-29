@@ -4,9 +4,9 @@ import { z } from "zod";
 import type { AppEnv } from "../app.js";
 import type { Db } from "../db/index.js";
 import {
+  acquireGenerationLock,
   findActiveGeneration,
   findGenerationByResponseId,
-  insertActiveGeneration,
   updateGenerationStatus,
 } from "../db/queries/active-generations.js";
 import { findAllMessagesBySession, getNextOrdinal, insertMessage } from "../db/queries/messages.js";
@@ -104,14 +104,15 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
     throw forbidden();
   }
 
-  // Check for existing active generation
-  const existing = await findActiveGeneration(db, session.id);
-  if (existing) {
-    throw conflict("A generation is already in progress for this session");
-  }
-
   const body = chatSendSchema.parse(await c.req.json());
   const responseId = generateResponseId();
+
+  // Atomically acquire session lock and insert active generation.
+  // Uses pg_advisory_xact_lock to prevent race conditions between tabs.
+  const generation = await acquireGenerationLock(db, { responseId, sessionId: session.id });
+  if (!generation) {
+    throw conflict("A generation is already in progress for this session");
+  }
 
   // Insert user message
   const ordinal = await getNextOrdinal(db, session.id);
@@ -122,9 +123,6 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
     ordinal,
     responseId,
   });
-
-  // Track active generation
-  await insertActiveGeneration(db, { responseId, sessionId: session.id });
 
   // Set up abort controller and emitter for resume
   const controller = new AbortController();
