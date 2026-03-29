@@ -10,6 +10,8 @@ export type {
   SkillMiddlewareOptions,
   SkillResolver,
   ToolSearchMiddlewareOptions,
+  WebSearchMiddlewareOptions,
+  WebSearchProviderConfig,
 } from "./middleware/index.js";
 // Middleware
 export {
@@ -17,7 +19,7 @@ export {
   createMcpMiddleware,
   createSkillMiddleware,
   createToolSearchMiddleware,
-  webSearchMiddleware,
+  createWebSearchMiddleware,
 } from "./middleware/index.js";
 export { createModel } from "./providers/index.js";
 // Sandbox

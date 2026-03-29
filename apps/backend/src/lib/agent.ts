@@ -7,6 +7,7 @@ import type {
   ModelProvider,
   Sandbox,
   SkillResolver,
+  WebSearchProviderConfig,
 } from "@mano/agent";
 import {
   createAskUserMiddleware,
@@ -15,7 +16,7 @@ import {
   createModel,
   createSkillMiddleware,
   createToolSearchMiddleware,
-  webSearchMiddleware,
+  createWebSearchMiddleware,
 } from "@mano/agent";
 import type { AgentMiddleware } from "langchain";
 import type { Db } from "../db/index.js";
@@ -106,8 +107,20 @@ export const createAgentForSession = async (options: CreateAgentOptions) => {
 
   const middleware: AgentMiddleware[] = [];
 
-  // Web search middleware
-  middleware.push(webSearchMiddleware);
+  // Web search middleware — routes Chinese queries to Volcengine, others to Tavily
+  const env = getEnv();
+  const searchProviders: WebSearchProviderConfig = {};
+  if (env.TAVILY_API_KEY) {
+    searchProviders.tavily = { apiKey: env.TAVILY_API_KEY };
+  }
+  if (env.VOLCENGINE_API_KEY && env.VOLCENGINE_SEARCH_BOT_ID) {
+    searchProviders.volcengine = {
+      apiKey: env.VOLCENGINE_API_KEY,
+      botId: env.VOLCENGINE_SEARCH_BOT_ID,
+      baseUrl: env.VOLCENGINE_BASE_URL,
+    };
+  }
+  middleware.push(createWebSearchMiddleware({ providers: searchProviders }));
 
   // Skill middleware — resolves skills from DB
   const skillResolver: SkillResolver = async (name) => {

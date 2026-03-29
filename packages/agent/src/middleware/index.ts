@@ -6,4 +6,5 @@ export type { SkillDefinition, SkillMiddlewareOptions, SkillResolver } from "./s
 export { createSkillMiddleware } from "./skill.js";
 export type { ToolSearchMiddlewareOptions } from "./tool-search.js";
 export { createToolSearchMiddleware } from "./tool-search.js";
-export { webSearchMiddleware } from "./web-search.js";
+export type { WebSearchMiddlewareOptions, WebSearchProviderConfig } from "./web-search.js";
+export { createWebSearchMiddleware } from "./web-search.js";

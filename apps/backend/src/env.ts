@@ -12,6 +12,10 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
 
+  // Web search providers (optional, enable as needed)
+  TAVILY_API_KEY: z.string().optional(),
+  VOLCENGINE_SEARCH_BOT_ID: z.string().optional(),
+
   // OAuth (optional)
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
