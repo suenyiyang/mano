@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* ===== Design Tokens ===== */
+:root {
+  --bg: #ffffff;
+  --bg-sidebar: #fafafa;
+  --bg-input: #ffffff;
+  --bg-hover: #f4f4f5;
+  --bg-active: #f0f0f1;
+  --bg-bubble: #f4f4f5;
+  --border: #e4e4e7;
+  --border-input: #d4d4d8;
+  --fg: #09090b;
+  --fg-muted: #71717a;
+  --fg-faint: #a1a1aa;
+  --fg-on-primary: #ffffff;
+  --primary: #18181b;
+  --primary-hover: #27272a;
+}
+
+.dark {
+  --bg: #09090b;
+  --bg-sidebar: #0c0c0e;
+  --bg-input: #09090b;
+  --bg-hover: #18181b;
+  --bg-active: #1c1c1f;
+  --bg-bubble: #18181b;
+  --border: #1e1e22;
+  --border-input: #27272a;
+  --fg: #fafafa;
+  --fg-muted: #a1a1aa;
+  --fg-faint: #52525b;
+  --fg-on-primary: #09090b;
+  --primary: #fafafa;
+  --primary-hover: #e4e4e7;
+}
+
+/* ===== Theme ===== */
+@theme {
+  --radius-default: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-full: 99px;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+/* ===== Base ===== */
+html,
+body {
+  height: 100%;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+  width: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}

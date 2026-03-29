@@ -1,0 +1,38 @@
+import type { FC } from "react";
+import type { ContentBlock, MessageTurn } from "../../types/message-turn.js";
+import { AgentMessage } from "./agent-message.js";
+import { UserMessage } from "./user-message.js";
+
+interface MessageListProps {
+  turns: MessageTurn[];
+  streamingBlocks: ContentBlock[];
+  isStreaming: boolean;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
+}
+
+export const MessageList: FC<MessageListProps> = (props) => {
+  return (
+    <div ref={props.scrollRef} onScroll={props.onScroll} className="flex-1 overflow-y-auto py-2">
+      <div className="mx-auto max-w-[720px] px-6">
+        {props.turns.map((turn) => {
+          if (turn.type === "user") {
+            return <UserMessage key={turn.message.id} message={turn.message} />;
+          }
+          return (
+            <AgentMessage key={turn.responseId} timestamp={turn.timestamp} blocks={turn.blocks} />
+          );
+        })}
+
+        {/* Live streaming content */}
+        {props.isStreaming && props.streamingBlocks.length > 0 && (
+          <AgentMessage
+            timestamp={new Date().toISOString()}
+            blocks={props.streamingBlocks}
+            isStreaming
+          />
+        )}
+      </div>
+    </div>
+  );
+};
