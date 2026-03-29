@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router";
 import { apiClient } from "../services/api-client.js";
 import { createSseClient } from "../services/sse-client.js";
@@ -16,6 +17,7 @@ interface UseSessionPageLogicProps {
 }
 
 export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -131,6 +133,13 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     dispatch({ type: "CLEAR_ASK_USER" });
   }, [dispatch]);
 
+  // Reset streaming state when switching sessions
+  useEffect(() => {
+    dispatch({ type: "RESET" });
+    resumeAttempted.current = false;
+    initialMessageSent.current = false;
+  }, [props.sessionId, dispatch]);
+
   // Handle initial message from new chat navigation
   useEffect(() => {
     const state = location.state as { initialMessage?: string } | null;
@@ -187,7 +196,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   return {
     session,
     topbarProps: {
-      title: session?.title ?? "Untitled",
+      title: session?.title ?? t("common.untitled"),
       currentTier: session?.modelTier ?? "pro",
       onRename: (title: string) => renameMutation.mutate(title),
       onFork: () => forkMutation.mutate(),
@@ -205,7 +214,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
       ...chatInputProps,
       isStreaming: streamingState.isStreaming,
       onTerminate: chatSend.terminate,
-      placeholder: "Send a follow-up...",
+      placeholder: t("chatInput.followUpPlaceholder"),
       maxWidth: "720px",
     },
     streamingError: streamingState.error,

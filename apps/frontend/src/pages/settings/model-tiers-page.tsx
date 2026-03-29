@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
+import { useTranslation } from "react-i18next";
 import { apiClient } from "../../services/api-client.js";
 import type { ModelTier } from "../../types/api.js";
 
 export const ModelTiersPage: FC = () => {
+  const { t } = useTranslation();
   const query = useQuery({
     queryKey: ["modelTiers"],
     queryFn: async () => {
@@ -13,17 +15,17 @@ export const ModelTiersPage: FC = () => {
   });
 
   if (query.isLoading) {
-    return <p className="text-sm text-[var(--fg-muted)]">Loading model tiers...</p>;
+    return <p className="text-sm text-[var(--fg-muted)]">{t("modelTiers.loading")}</p>;
   }
 
   const tiers = query.data ?? [];
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-[var(--fg)]">Model Tiers</h2>
+      <h2 className="text-base font-semibold text-[var(--fg)]">{t("modelTiers.title")}</h2>
 
       {tiers.length === 0 ? (
-        <p className="text-sm text-[var(--fg-muted)]">No model tiers available.</p>
+        <p className="text-sm text-[var(--fg-muted)]">{t("modelTiers.empty")}</p>
       ) : (
         <div className="space-y-4">
           {tiers.map((tier) => (
@@ -35,8 +37,8 @@ export const ModelTiersPage: FC = () => {
                 <span className="text-sm font-medium text-[var(--fg)] capitalize">{tier.tier}</span>
                 {tier.rateLimit && (
                   <span className="text-xs text-[var(--fg-muted)]">
-                    {tier.rateLimit.requestsPerMinute} req/min &middot;{" "}
-                    {tier.rateLimit.requestsPerDay} req/day
+                    {t("modelTiers.reqPerMin", { count: tier.rateLimit.requestsPerMinute })}{" "}
+                    &middot; {t("modelTiers.reqPerDay", { count: tier.rateLimit.requestsPerDay })}
                   </span>
                 )}
               </div>

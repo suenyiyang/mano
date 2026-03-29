@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
+import { useTranslation } from "react-i18next";
 import { apiClient } from "../../services/api-client.js";
 import {
   DropdownMenu,
@@ -23,6 +24,7 @@ interface TierInfo {
 }
 
 export const ModelTierSelector: FC<ModelTierSelectorProps> = (props) => {
+  const { t } = useTranslation();
   const { data } = useQuery({
     queryKey: ["modelTiers"],
     queryFn: async () => {
@@ -38,7 +40,7 @@ export const ModelTierSelector: FC<ModelTierSelectorProps> = (props) => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{props.children}</DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Model Tier</DropdownMenuLabel>
+        <DropdownMenuLabel>{t("modelTierSelector.label")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {tiers.map((tier) => (
           <DropdownMenuItem

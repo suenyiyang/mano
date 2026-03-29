@@ -1,5 +1,6 @@
 import { Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { type FC, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../../components/ui/button.js";
 import {
   Dialog,
@@ -27,6 +28,7 @@ const emptyForm: SkillFormState = {
 };
 
 export const SkillsPage: FC = () => {
+  const { t } = useTranslation();
   const { skills, isLoading, createMutation, updateMutation, deleteMutation } = useSkillsLogic();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
@@ -69,21 +71,21 @@ export const SkillsPage: FC = () => {
   };
 
   if (isLoading) {
-    return <p className="text-sm text-[var(--fg-muted)]">Loading skills...</p>;
+    return <p className="text-sm text-[var(--fg-muted)]">{t("skills.loading")}</p>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-[var(--fg)]">Skills</h2>
+        <h2 className="text-base font-semibold text-[var(--fg)]">{t("skills.title")}</h2>
         <Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4" />
-          Add Skill
+          {t("skills.addSkill")}
         </Button>
       </div>
 
       {skills.length === 0 ? (
-        <p className="text-sm text-[var(--fg-muted)]">No skills configured yet.</p>
+        <p className="text-sm text-[var(--fg-muted)]">{t("skills.empty")}</p>
       ) : (
         <div className="space-y-2">
           {skills.map((skill) => (
@@ -96,7 +98,7 @@ export const SkillsPage: FC = () => {
                   <span className="text-sm font-medium text-[var(--fg)]">{skill.displayName}</span>
                   <span className="text-xs text-[var(--fg-faint)] font-mono">{skill.name}</span>
                   {!skill.isEnabled && (
-                    <span className="text-xs text-[var(--fg-faint)]">disabled</span>
+                    <span className="text-xs text-[var(--fg-faint)]">{t("common.disabled")}</span>
                   )}
                 </div>
                 {skill.description && (
@@ -124,34 +126,36 @@ export const SkillsPage: FC = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingSkill ? "Edit Skill" : "Create Skill"}</DialogTitle>
+            <DialogTitle>
+              {editingSkill ? t("skills.editTitle") : t("skills.createTitle")}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input
-              placeholder="Name (kebab-case)"
+              placeholder={t("skills.namePlaceholder")}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
             <Input
-              placeholder="Display Name"
+              placeholder={t("skills.displayNamePlaceholder")}
               value={form.displayName}
               onChange={(e) => setForm({ ...form, displayName: e.target.value })}
             />
             <Input
-              placeholder="Description (optional)"
+              placeholder={t("skills.descriptionPlaceholder")}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
             <textarea
               className="flex min-h-[120px] w-full rounded-[var(--radius-default)] border border-[var(--border-input)] bg-transparent px-3 py-2 text-sm placeholder:text-[var(--fg-faint)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border)]"
-              placeholder="Skill content / prompt"
+              placeholder={t("skills.contentPlaceholder")}
               value={form.content}
               onChange={(e) => setForm({ ...form, content: e.target.value })}
             />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={handleSubmit}
@@ -163,7 +167,7 @@ export const SkillsPage: FC = () => {
                 updateMutation.isPending
               }
             >
-              {editingSkill ? "Save" : "Create"}
+              {editingSkill ? t("common.save") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>

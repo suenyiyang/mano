@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { GitFork, MoreHorizontal, Pencil, Share2, Trash2 } from "lucide-react";
 import { type FC, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { apiClient } from "../../services/api-client.js";
 import {
   DropdownMenu,
@@ -30,6 +31,7 @@ interface TierInfo {
 }
 
 export const Topbar: FC<TopbarProps> = (props) => {
+  const { t } = useTranslation();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(props.title);
 
@@ -73,7 +75,7 @@ export const Topbar: FC<TopbarProps> = (props) => {
         <button
           type="button"
           className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[var(--fg-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
-          title="Share"
+          title={t("topbar.share")}
         >
           <Share2 size={16} strokeWidth={1.75} />
         </button>
@@ -82,7 +84,7 @@ export const Topbar: FC<TopbarProps> = (props) => {
             <button
               type="button"
               className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[var(--fg-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
-              title="More"
+              title={t("topbar.more")}
             >
               <MoreHorizontal size={16} strokeWidth={1.75} />
             </button>
@@ -95,16 +97,16 @@ export const Topbar: FC<TopbarProps> = (props) => {
               }}
             >
               <Pencil size={14} />
-              Rename
+              {t("topbar.rename")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={props.onFork}>
               <GitFork size={14} />
-              Fork
+              {t("topbar.fork")}
             </DropdownMenuItem>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>Model Tier</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger>{t("topbar.modelTier")}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                <DropdownMenuLabel>Select Tier</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("topbar.selectTier")}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {(tiersQuery.data ?? []).map((tier) => (
                   <DropdownMenuItem
@@ -120,7 +122,7 @@ export const Topbar: FC<TopbarProps> = (props) => {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={props.onDelete} className="text-red-500">
               <Trash2 size={14} />
-              Delete
+              {t("common.delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

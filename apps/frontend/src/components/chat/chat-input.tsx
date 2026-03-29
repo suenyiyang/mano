@@ -1,5 +1,6 @@
 import { ArrowUp, Globe, Paperclip, Square } from "lucide-react";
 import type { FC, RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils.js";
 
 interface ChatInputProps {
@@ -16,6 +17,7 @@ interface ChatInputProps {
 }
 
 export const ChatInput: FC<ChatInputProps> = (props) => {
+  const { t } = useTranslation();
   const isEmpty = !props.value.trim();
 
   return (
@@ -31,7 +33,7 @@ export const ChatInput: FC<ChatInputProps> = (props) => {
           className="w-full resize-none border-none bg-transparent text-sm leading-[1.5] text-[var(--fg)] outline-none placeholder:text-[var(--fg-faint)]"
           style={{ minHeight: "22px", fontFamily: "var(--font-sans)" }}
           rows={1}
-          placeholder={props.placeholder ?? "Describe your task..."}
+          placeholder={props.placeholder ?? t("chatInput.placeholder")}
           value={props.value}
           onChange={(e) => props.onChange(e.target.value)}
           onKeyDown={props.handleKeyDown}
@@ -39,10 +41,10 @@ export const ChatInput: FC<ChatInputProps> = (props) => {
         />
         <div className="flex items-center justify-between">
           <div className="flex gap-0.5">
-            <IconButton title="Attach file">
+            <IconButton title={t("chatInput.attachFile")}>
               <Paperclip size={15} strokeWidth={1.75} />
             </IconButton>
-            <IconButton title="Web search">
+            <IconButton title={t("chatInput.webSearch")}>
               <Globe size={15} strokeWidth={1.75} />
             </IconButton>
           </div>
@@ -51,7 +53,7 @@ export const ChatInput: FC<ChatInputProps> = (props) => {
               type="button"
               className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-lg border-none bg-[var(--primary)] text-[var(--fg-on-primary)] transition-colors hover:bg-[var(--primary-hover)]"
               onClick={props.onTerminate}
-              title="Stop generating"
+              title={t("chatInput.stopGenerating")}
             >
               <Square size={15} strokeWidth={2} />
             </button>

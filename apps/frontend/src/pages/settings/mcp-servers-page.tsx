@@ -1,5 +1,6 @@
 import { Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { type FC, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../../components/ui/button.js";
 import {
   Dialog,
@@ -31,6 +32,7 @@ const emptyForm: McpFormState = {
 };
 
 export const McpServersPage: FC = () => {
+  const { t } = useTranslation();
   const { mcpServers, isLoading, createMutation, updateMutation, deleteMutation } =
     useMcpServersLogic();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -83,21 +85,21 @@ export const McpServersPage: FC = () => {
   };
 
   if (isLoading) {
-    return <p className="text-sm text-[var(--fg-muted)]">Loading MCP servers...</p>;
+    return <p className="text-sm text-[var(--fg-muted)]">{t("mcpServers.loading")}</p>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-[var(--fg)]">MCP Servers</h2>
+        <h2 className="text-base font-semibold text-[var(--fg)]">{t("mcpServers.title")}</h2>
         <Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4" />
-          Add Server
+          {t("mcpServers.addServer")}
         </Button>
       </div>
 
       {mcpServers.length === 0 ? (
-        <p className="text-sm text-[var(--fg-muted)]">No MCP servers configured yet.</p>
+        <p className="text-sm text-[var(--fg-muted)]">{t("mcpServers.empty")}</p>
       ) : (
         <div className="space-y-2">
           {mcpServers.map((server) => (
@@ -112,7 +114,7 @@ export const McpServersPage: FC = () => {
                     {server.transport}
                   </span>
                   {!server.isEnabled && (
-                    <span className="text-xs text-[var(--fg-faint)]">disabled</span>
+                    <span className="text-xs text-[var(--fg-faint)]">{t("common.disabled")}</span>
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-[var(--fg-muted)] font-mono truncate">
@@ -138,11 +140,13 @@ export const McpServersPage: FC = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingServer ? "Edit MCP Server" : "Add MCP Server"}</DialogTitle>
+            <DialogTitle>
+              {editingServer ? t("mcpServers.editTitle") : t("mcpServers.createTitle")}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input
-              placeholder="Server name"
+              placeholder={t("mcpServers.namePlaceholder")}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
@@ -158,19 +162,19 @@ export const McpServersPage: FC = () => {
             {form.transport === "stdio" ? (
               <>
                 <Input
-                  placeholder="Command (e.g. npx)"
+                  placeholder={t("mcpServers.commandPlaceholder")}
                   value={form.command}
                   onChange={(e) => setForm({ ...form, command: e.target.value })}
                 />
                 <Input
-                  placeholder="Args (space-separated)"
+                  placeholder={t("mcpServers.argsPlaceholder")}
                   value={form.args}
                   onChange={(e) => setForm({ ...form, args: e.target.value })}
                 />
               </>
             ) : (
               <Input
-                placeholder="URL"
+                placeholder={t("mcpServers.urlPlaceholder")}
                 value={form.url}
                 onChange={(e) => setForm({ ...form, url: e.target.value })}
               />
@@ -178,7 +182,7 @@ export const McpServersPage: FC = () => {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={handleSubmit}
@@ -189,7 +193,7 @@ export const McpServersPage: FC = () => {
                 updateMutation.isPending
               }
             >
-              {editingServer ? "Save" : "Create"}
+              {editingServer ? t("common.save") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>

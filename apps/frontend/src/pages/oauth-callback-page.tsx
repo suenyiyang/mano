@@ -1,8 +1,10 @@
 import { type FC, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
 import { authToken } from "../services/auth-token.js";
 
 export const OAuthCallbackPage: FC = () => {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -20,7 +22,7 @@ export const OAuthCallbackPage: FC = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
-      <p className="text-sm text-[var(--fg-muted)]">Signing in...</p>
+      <p className="text-sm text-[var(--fg-muted)]">{t("common.signingIn")}</p>
     </div>
   );
 };

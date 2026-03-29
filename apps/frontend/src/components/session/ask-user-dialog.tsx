@@ -1,4 +1,5 @@
 import { type FC, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button.js";
 import {
   Dialog,
@@ -19,6 +20,7 @@ interface AskUserDialogProps {
 }
 
 export const AskUserDialog: FC<AskUserDialogProps> = (props) => {
+  const { t } = useTranslation();
   const [answer, setAnswer] = useState("");
 
   const handleSubmit = () => {
@@ -35,7 +37,7 @@ export const AskUserDialog: FC<AskUserDialogProps> = (props) => {
     <Dialog open={props.open} onOpenChange={(open) => !open && props.onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Mano needs your input</DialogTitle>
+          <DialogTitle>{t("askUserDialog.title")}</DialogTitle>
           <DialogDescription>{props.question}</DialogDescription>
         </DialogHeader>
 
@@ -54,7 +56,7 @@ export const AskUserDialog: FC<AskUserDialogProps> = (props) => {
           </div>
         ) : (
           <Input
-            placeholder="Type your answer..."
+            placeholder={t("askUserDialog.placeholder")}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             onKeyDown={(e) => {
@@ -66,10 +68,10 @@ export const AskUserDialog: FC<AskUserDialogProps> = (props) => {
         {!props.options && (
           <DialogFooter>
             <Button variant="ghost" onClick={props.onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleSubmit} disabled={!answer.trim()}>
-              Submit
+              {t("askUserDialog.submit")}
             </Button>
           </DialogFooter>
         )}

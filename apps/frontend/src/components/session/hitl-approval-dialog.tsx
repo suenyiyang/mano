@@ -1,4 +1,5 @@
 import { type FC, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button.js";
 import {
   Dialog,
@@ -19,27 +20,28 @@ interface HitlApprovalDialogProps {
 }
 
 export const HitlApprovalDialog: FC<HitlApprovalDialogProps> = (props) => {
+  const { t } = useTranslation();
   const [reason, setReason] = useState("");
 
   return (
     <Dialog open={props.open} onOpenChange={(open) => !open && props.onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Approval required</DialogTitle>
+          <DialogTitle>{t("hitlDialog.title")}</DialogTitle>
           <DialogDescription>{props.description}</DialogDescription>
         </DialogHeader>
 
         <Input
-          placeholder="Reason for denial (optional)"
+          placeholder={t("hitlDialog.reasonPlaceholder")}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => props.onDeny(reason || undefined)}>
-            Deny
+            {t("hitlDialog.deny")}
           </Button>
-          <Button onClick={props.onApprove}>Approve</Button>
+          <Button onClick={props.onApprove}>{t("hitlDialog.approve")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

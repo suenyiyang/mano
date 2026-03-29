@@ -1,4 +1,5 @@
 import { type FC, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
 import { cn } from "../../lib/utils.js";
 import type { Session } from "../../types/api.js";
@@ -12,6 +13,7 @@ interface SessionListProps {
 }
 
 export const SessionList: FC<SessionListProps> = (props) => {
+  const { t } = useTranslation();
   const { sessionId } = useParams();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +52,7 @@ export const SessionList: FC<SessionListProps> = (props) => {
   if (props.sessions.length === 0) {
     return (
       <div className="flex-1 px-4 py-8 text-center text-xs text-[var(--fg-faint)]">
-        No conversations yet
+        {t("sessionList.empty")}
       </div>
     );
   }
@@ -67,7 +69,7 @@ export const SessionList: FC<SessionListProps> = (props) => {
             sessionId === session.id && "bg-[var(--bg-active)] font-medium text-[var(--fg)]",
           )}
         >
-          {session.title || "Untitled"}
+          {session.title || t("common.untitled")}
         </Link>
       ))}
       <div ref={sentinelRef} className="h-1" />
