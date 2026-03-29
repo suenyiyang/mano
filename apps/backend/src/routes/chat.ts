@@ -10,17 +10,12 @@ import {
   updateGenerationStatus,
 } from "../db/queries/active-generations.js";
 import { findAllMessagesBySession, getNextOrdinal, insertMessage } from "../db/queries/messages.js";
-import { findEnabledModelsByTier } from "../db/queries/models.js";
 import { addTokensToDailyUsage } from "../db/queries/rate-limits.js";
 import { findSessionById } from "../db/queries/sessions.js";
 import { findEventsAfter, insertSseEvent } from "../db/queries/sse-events.js";
-import {
-  createAgentForSession,
-  createModelInstance,
-  dbMessagesToLangChain,
-  pickModel,
-} from "../lib/agent.js";
+import { createAgentForSession, createModelInstance, dbMessagesToLangChain } from "../lib/agent.js";
 import { generateResponseId } from "../lib/id.js";
+import { getModelConfig } from "../lib/model-config.js";
 import { createSseStream, SSE_HEADERS, type SseSender } from "../lib/sse.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { badRequest, conflict, forbidden, notFound } from "../middleware/error-handler.js";
@@ -124,14 +119,9 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
     responseId,
   });
 
-  // Validate model availability BEFORE starting SSE stream
-  const models = await findEnabledModelsByTier(db, session.modelTier);
-  if (models.length === 0) {
-    await updateGenerationStatus(db, responseId, "failed");
-    throw badRequest(`No enabled models for tier "${session.modelTier}"`);
-  }
-  const modelRow = pickModel(models);
-  const model = createModelInstance(modelRow);
+  // Load model from JSON config
+  const modelConfig = getModelConfig();
+  const model = createModelInstance(modelConfig);
 
   // Set up abort controller and emitter for resume
   const controller = new AbortController();
@@ -265,7 +255,7 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
               content: accumulatedText || "",
               toolCalls: toolCalls ?? undefined,
               ordinal: nextOrdinal++,
-              modelId: modelRow.apiModelId,
+              modelId: modelConfig.apiModelId,
               responseId,
               tokenUsage: totalUsage,
             });

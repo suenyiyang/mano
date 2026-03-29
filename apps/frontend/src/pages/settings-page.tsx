@@ -3,17 +3,15 @@ import { useTranslation } from "react-i18next";
 import { useSidebar } from "../contexts/sidebar-context.js";
 import { cn } from "../lib/utils.js";
 import { McpServersPage } from "./settings/mcp-servers-page.js";
-import { ModelTiersPage } from "./settings/model-tiers-page.js";
 import { SkillsPage } from "./settings/skills-page.js";
 
-type Tab = "skills" | "mcp-servers" | "model-tiers";
+type Tab = "skills" | "mcp-servers";
 
-const TAB_IDS: Tab[] = ["skills", "mcp-servers", "model-tiers"];
+const TAB_IDS: Tab[] = ["skills", "mcp-servers"];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   skills: "settings.tabSkills",
   "mcp-servers": "settings.tabMcpServers",
-  "model-tiers": "settings.tabModelTiers",
 };
 
 export const SettingsPage: FC = () => {
@@ -53,7 +51,6 @@ export const SettingsPage: FC = () => {
 
           {activeTab === "skills" && <SkillsPage />}
           {activeTab === "mcp-servers" && <McpServersPage />}
-          {activeTab === "model-tiers" && <ModelTiersPage />}
         </div>
       </div>
     </div>

@@ -32,47 +32,12 @@ vi.mock("../db/queries/skills.js", () => ({
   findSkillByName: vi.fn(async () => null),
 }));
 
-describe("pickModel", () => {
-  it("returns the only model when array has one element", async () => {
-    const { pickModel } = await import("./agent.js");
-    const models = [makeModel("pro", "volcengine", "doubao-pro", 1)];
-
-    expect(pickModel(models)).toBe(models[0]);
-  });
-
-  it("throws when no models available", async () => {
-    const { pickModel } = await import("./agent.js");
-
-    expect(() => pickModel([])).toThrow("No enabled models");
-  });
-
-  it("returns a model from weighted selection", async () => {
-    const { pickModel } = await import("./agent.js");
-    const models = [
-      makeModel("pro", "volcengine", "doubao-pro", 3),
-      makeModel("pro", "openai", "gpt-4o", 1),
-    ];
-
-    // Run many times to verify both can be selected
-    const selected = new Set<string>();
-    for (let i = 0; i < 100; i++) {
-      const model = pickModel(models);
-      selected.add(model.apiModelId);
-    }
-
-    expect(selected.has("doubao-pro")).toBe(true);
-    // With weight 1/4, gpt-4o should be selected at least once in 100 trials
-    expect(selected.has("gpt-4o")).toBe(true);
-  });
-});
-
 describe("createModelInstance", () => {
   it("creates a volcengine model", async () => {
     const { createModelInstance } = await import("./agent.js");
     const { createModel } = await import("@mano/agent");
 
-    const row = makeModel("pro", "volcengine", "doubao-pro", 1);
-    createModelInstance(row);
+    createModelInstance({ provider: "volcengine", apiModelId: "doubao-pro" });
 
     expect(createModel).toHaveBeenCalledWith({
       provider: "volcengine",
@@ -86,8 +51,7 @@ describe("createModelInstance", () => {
     const { createModelInstance } = await import("./agent.js");
     const { createModel } = await import("@mano/agent");
 
-    const row = makeModel("pro", "openai", "gpt-4o", 1);
-    createModelInstance(row);
+    createModelInstance({ provider: "openai", apiModelId: "gpt-4o" });
 
     expect(createModel).toHaveBeenCalledWith({
       provider: "openai",
@@ -100,8 +64,7 @@ describe("createModelInstance", () => {
     const { createModelInstance } = await import("./agent.js");
     const { createModel } = await import("@mano/agent");
 
-    const row = makeModel("pro", "anthropic", "claude-sonnet-4-5-20250929", 1);
-    createModelInstance(row);
+    createModelInstance({ provider: "anthropic", apiModelId: "claude-sonnet-4-5-20250929" });
 
     expect(createModel).toHaveBeenCalledWith({
       provider: "anthropic",
@@ -112,9 +75,10 @@ describe("createModelInstance", () => {
 
   it("throws for unknown provider", async () => {
     const { createModelInstance } = await import("./agent.js");
-    const row = makeModel("pro", "unknown", "model-x", 1);
 
-    expect(() => createModelInstance(row)).toThrow("Unknown provider");
+    expect(() => createModelInstance({ provider: "unknown", apiModelId: "model-x" })).toThrow(
+      "Unknown provider",
+    );
   });
 });
 
@@ -194,16 +158,3 @@ describe("dbMessagesToLangChain", () => {
     expect(result[2]).toBeInstanceOf(AIMessage);
   });
 });
-
-// Helper to create model tier rows matching the Drizzle schema shape
-function makeModel(tier: string, provider: string, apiModelId: string, weight: number) {
-  return {
-    tier,
-    provider,
-    apiModelId,
-    displayName: apiModelId,
-    weight,
-    isEnabled: true,
-    config: {},
-  };
-}

@@ -69,8 +69,12 @@ vi.mock("../db/queries/messages.js", () => ({
   insertMessage: vi.fn(async () => ({})),
 }));
 
-vi.mock("../db/queries/models.js", () => ({
-  findEnabledModelsByTier: vi.fn(async () => []),
+vi.mock("../lib/model-config.js", () => ({
+  getModelConfig: vi.fn(() => ({
+    provider: "openai",
+    apiModelId: "gpt-4o",
+    displayName: "GPT-4o",
+  })),
 }));
 
 vi.mock("../db/queries/sse-events.js", () => ({
@@ -84,7 +88,6 @@ vi.mock("../lib/agent.js", () => ({
     mcpManager: null,
   })),
   createModelInstance: vi.fn(() => ({})),
-  pickModel: vi.fn(() => ({ apiModelId: "test-model" })),
   dbMessagesToLangChain: vi.fn(() => []),
 }));
 
@@ -294,33 +297,7 @@ describe("chat/respond", () => {
 });
 
 describe("chat/send", () => {
-  it("returns 400 when no models available for tier", async () => {
-    const app = await createTestApp();
-    const res = await app.request(
-      `/api/sessions/${TEST_SESSION_ID}/chat/send`,
-      jsonPost("", { content: "Hello" }),
-    );
-
-    // Should return HTTP 400 error, not a 200 SSE stream with error event
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toContain("No enabled models");
-  });
-
-  it("returns 200 SSE stream when models are available", async () => {
-    const { findEnabledModelsByTier } = await import("../db/queries/models.js");
-    vi.mocked(findEnabledModelsByTier).mockResolvedValueOnce([
-      {
-        tier: "pro",
-        provider: "openai",
-        apiModelId: "gpt-4o",
-        displayName: "GPT-4o",
-        weight: 1,
-        isEnabled: true,
-        config: {},
-      },
-    ]);
-
+  it("returns 200 SSE stream with configured model", async () => {
     const app = await createTestApp();
     const res = await app.request(
       `/api/sessions/${TEST_SESSION_ID}/chat/send`,

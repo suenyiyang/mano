@@ -165,23 +165,3 @@ export interface UpdateMcpServerPayload {
   env?: Record<string, string>;
   isEnabled?: boolean;
 }
-
-// ─── Model Tiers ──────────────────────────────────────────────────────────
-
-export interface ModelTierModel {
-  provider: string;
-  apiModelId: string;
-  displayName: string;
-}
-
-export interface TierRateLimit {
-  requestsPerMinute: number;
-  requestsPerDay: number;
-  tokensPerDay: number;
-}
-
-export interface ModelTier {
-  tier: string;
-  models: ModelTierModel[];
-  rateLimit: TierRateLimit | null;
-}

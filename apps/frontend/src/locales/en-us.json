@@ -75,13 +75,9 @@
   "topbar.more": "More",
   "topbar.rename": "Rename",
   "topbar.fork": "Fork",
-  "topbar.modelTier": "Model Tier",
-  "topbar.selectTier": "Select Tier",
-
   "settings.title": "Settings",
   "settings.tabSkills": "Skills",
   "settings.tabMcpServers": "MCP Servers",
-  "settings.tabModelTiers": "Model Tiers",
 
   "skills.loading": "Loading skills...",
   "skills.title": "Skills",
@@ -103,13 +99,5 @@
   "mcpServers.namePlaceholder": "Server name",
   "mcpServers.commandPlaceholder": "Command (e.g. npx)",
   "mcpServers.argsPlaceholder": "Args (space-separated)",
-  "mcpServers.urlPlaceholder": "URL",
-
-  "modelTiers.loading": "Loading model tiers...",
-  "modelTiers.title": "Model Tiers",
-  "modelTiers.empty": "No model tiers available.",
-  "modelTiers.reqPerMin": "{{count}} req/min",
-  "modelTiers.reqPerDay": "{{count}} req/day",
-
-  "modelTierSelector.label": "Model Tier"
+  "mcpServers.urlPlaceholder": "URL"
 }

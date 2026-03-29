@@ -12,7 +12,6 @@ test.describe("Settings page (/app/settings)", () => {
     await expect(page.getByRole("main").getByText("Settings")).toBeVisible();
     await expect(page.getByRole("button", { name: "Skills" })).toBeVisible();
     await expect(page.getByRole("button", { name: "MCP Servers" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Model Tiers" })).toBeVisible();
   });
 
   test("shows skills tab by default with add button", async ({ page }) => {
@@ -141,48 +140,5 @@ test.describe("Settings page (/app/settings)", () => {
     await expect(page.getByText("filesystem")).toBeVisible();
     await expect(page.getByText("stdio")).toBeVisible();
     await expect(page.getByText("npx")).toBeVisible();
-  });
-
-  test("switches to Model Tiers tab", async ({ page }) => {
-    await page.route("**/api/skills/list", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ skills: [] }),
-      }),
-    );
-    await page.route("**/api/models/tiers", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          tiers: [
-            {
-              tier: "pro",
-              models: [
-                {
-                  provider: "openai",
-                  apiModelId: "gpt-4o",
-                  displayName: "GPT-4o",
-                },
-              ],
-              rateLimit: {
-                requestsPerMinute: 30,
-                requestsPerDay: 1000,
-                tokensPerDay: 500000,
-              },
-            },
-          ],
-        }),
-      }),
-    );
-
-    await page.goto("/app/settings");
-    await page.getByRole("button", { name: "Model Tiers" }).click();
-
-    await expect(page.getByText("pro")).toBeVisible();
-    await expect(page.getByText("GPT-4o", { exact: true })).toBeVisible();
-    await expect(page.getByText("openai")).toBeVisible();
-    await expect(page.getByText("30 req/min")).toBeVisible();
   });
 });

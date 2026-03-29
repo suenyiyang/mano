@@ -107,19 +107,6 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     },
   });
 
-  const modelTierMutation = useMutation({
-    mutationFn: async (modelTier: string) => {
-      const { data } = await apiClient.post<{ session: Session }>(
-        `/sessions/${props.sessionId}/update`,
-        { modelTier },
-      );
-      return data.session;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["session", props.sessionId] });
-    },
-  });
-
   // ─── Ask user / HITL respond ──────────────────────────────────────────
 
   const handleAskUserAnswer = useCallback(
@@ -209,11 +196,9 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     session,
     topbarProps: {
       title: session?.title ?? t("common.untitled"),
-      currentTier: session?.modelTier ?? "pro",
       onRename: (title: string) => renameMutation.mutate(title),
       onFork: () => forkMutation.mutate(),
       onDelete: () => deleteMutation.mutate(),
-      onModelTierChange: (tier: string) => modelTierMutation.mutate(tier),
     },
     messageListProps: {
       turns: messageList.turns,

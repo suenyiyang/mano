@@ -75,13 +75,9 @@
   "topbar.more": "更多",
   "topbar.rename": "重命名",
   "topbar.fork": "复刻",
-  "topbar.modelTier": "模型层级",
-  "topbar.selectTier": "选择层级",
-
   "settings.title": "设置",
   "settings.tabSkills": "技能",
   "settings.tabMcpServers": "MCP 服务器",
-  "settings.tabModelTiers": "模型层级",
 
   "skills.loading": "加载技能中...",
   "skills.title": "技能",
@@ -103,13 +99,5 @@
   "mcpServers.namePlaceholder": "服务器名称",
   "mcpServers.commandPlaceholder": "命令（例如 npx）",
   "mcpServers.argsPlaceholder": "参数（空格分隔）",
-  "mcpServers.urlPlaceholder": "URL",
-
-  "modelTiers.loading": "加载模型层级中...",
-  "modelTiers.title": "模型层级",
-  "modelTiers.empty": "暂无可用的模型层级。",
-  "modelTiers.reqPerMin": "{{count}} 次/分钟",
-  "modelTiers.reqPerDay": "{{count}} 次/天",
-
-  "modelTierSelector.label": "模型层级"
+  "mcpServers.urlPlaceholder": "URL"
 }

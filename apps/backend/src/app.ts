@@ -9,7 +9,6 @@ import { chatRoutes } from "./routes/chat.js";
 import { healthRoutes } from "./routes/health.js";
 import { mcpServerRoutes } from "./routes/mcp-servers.js";
 import { messageRoutes } from "./routes/messages.js";
-import { modelRoutes } from "./routes/models.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { skillRoutes } from "./routes/skills.js";
 
@@ -43,7 +42,6 @@ app.route("/api/sessions", chatRoutes);
 app.route("/api/attachments", attachmentRoutes);
 app.route("/api/skills", skillRoutes);
 app.route("/api/mcp-servers", mcpServerRoutes);
-app.route("/api/models", modelRoutes);
 
 app.get("/", (c) => c.json({ message: "Mano API" }));
 
