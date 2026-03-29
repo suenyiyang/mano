@@ -91,6 +91,8 @@ test.describe("Send message and SSE streaming", () => {
     await textarea.fill("Help me build something");
     await textarea.press("Enter");
 
+    // User message bubble appears immediately
+    await expect(page.getByText("Help me build something")).toBeVisible();
     // Streamed text appears in a live agent message
     await expect(page.getByText("Hello! I can help you with that.")).toBeVisible();
     // Agent header with avatar
@@ -116,6 +118,9 @@ test.describe("Send message and SSE streaming", () => {
     await textarea.fill("Write an HTML file");
     await textarea.press("Enter");
 
+    // User message visible
+    await expect(page.getByText("Write an HTML file")).toBeVisible();
+    // Agent streaming content
     await expect(page.getByText("Let me write that file.")).toBeVisible();
     await expect(page.getByText("write_file")).toBeVisible();
     await expect(page.getByText("Done! File created.")).toBeVisible();
@@ -132,9 +137,9 @@ test.describe("Send message and SSE streaming", () => {
     await textarea.fill("Do something");
     await textarea.press("Enter");
 
-    // Stop button should appear during streaming
+    // User message and stop button visible during streaming
+    await expect(page.getByText("Do something")).toBeVisible();
     await expect(page.getByTitle("Stop generating")).toBeVisible();
-    // Streaming content visible
     await expect(page.getByText("Working on it...")).toBeVisible();
   });
 
@@ -255,6 +260,8 @@ test.describe("Session switching while streaming", () => {
     await textarea1.fill("Alpha question");
     await textarea1.press("Enter");
 
+    // Both user message and agent response visible
+    await expect(page.getByText("Alpha question")).toBeVisible();
     await expect(page.getByText("Alpha is thinking...")).toBeVisible();
     await expect(page.getByTitle("Stop generating")).toBeVisible();
 
@@ -277,6 +284,7 @@ test.describe("Session switching while streaming", () => {
     await textarea2.fill("Beta question");
     await textarea2.press("Enter");
 
+    await expect(page.getByText("Beta question")).toBeVisible();
     await expect(page.getByText("Beta response here.")).toBeVisible();
     await expect(page.getByTitle("Stop generating")).toBeVisible();
 

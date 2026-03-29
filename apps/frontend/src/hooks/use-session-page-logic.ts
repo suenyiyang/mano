@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router";
 import { apiClient } from "../services/api-client.js";
@@ -43,13 +43,24 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   // Streaming
   const [streamingState, dispatch] = useStreamingReducer();
   const chatSend = useChatSendLogic({ sessionId: props.sessionId, dispatch });
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  const wasStreaming = useRef(false);
 
   // Auto-scroll
   const autoScroll = useAutoScroll(scrollRef, [messageList.turns, streamingState.contentBlocks]);
 
+  // Clear pending user message only when streaming transitions from true → false
+  useEffect(() => {
+    if (wasStreaming.current && !streamingState.isStreaming) {
+      setPendingUserMessage(null);
+    }
+    wasStreaming.current = streamingState.isStreaming;
+  }, [streamingState.isStreaming]);
+
   // Send handler
   const handleSend = useCallback(
     (content: string) => {
+      setPendingUserMessage(content);
       chatSend.send(content);
     },
     [chatSend],
@@ -136,6 +147,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   // Reset streaming state when switching sessions
   useEffect(() => {
     dispatch({ type: "RESET" });
+    setPendingUserMessage(null);
     resumeAttempted.current = false;
     initialMessageSent.current = false;
   }, [props.sessionId, dispatch]);
@@ -205,6 +217,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     },
     messageListProps: {
       turns: messageList.turns,
+      pendingUserMessage,
       streamingBlocks: streamingState.contentBlocks,
       isStreaming: streamingState.isStreaming,
       scrollRef,

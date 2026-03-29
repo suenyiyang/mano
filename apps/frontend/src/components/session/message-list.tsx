@@ -5,6 +5,7 @@ import { UserMessage } from "./user-message.js";
 
 interface MessageListProps {
   turns: MessageTurn[];
+  pendingUserMessage: string | null;
   streamingBlocks: ContentBlock[];
   isStreaming: boolean;
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -23,6 +24,27 @@ export const MessageList: FC<MessageListProps> = (props) => {
             <AgentMessage key={turn.responseId} timestamp={turn.timestamp} blocks={turn.blocks} />
           );
         })}
+
+        {/* Pending user message (optimistic, before API refetch) */}
+        {props.pendingUserMessage && (
+          <UserMessage
+            message={{
+              id: "pending",
+              sessionId: "",
+              role: "user",
+              content: props.pendingUserMessage,
+              toolCalls: null,
+              toolCallId: null,
+              toolName: null,
+              ordinal: 0,
+              modelId: null,
+              responseId: null,
+              tokenUsage: null,
+              isCompacted: false,
+              createdAt: new Date().toISOString(),
+            }}
+          />
+        )}
 
         {/* Live streaming content */}
         {props.isStreaming && props.streamingBlocks.length > 0 && (
