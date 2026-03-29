@@ -2,12 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation } from "react-router";
 import { apiClient } from "../services/api-client.js";
-import type { Session } from "../types/api.js";
+import { createSseClient } from "../services/sse-client.js";
+import type { ActiveGeneration, Session } from "../types/api.js";
+import type { SseEvent } from "../types/sse-events.js";
 import { useAutoScroll } from "./use-auto-scroll.js";
 import { useChatInputLogic } from "./use-chat-input-logic.js";
 import { useChatSendLogic } from "./use-chat-send-logic.js";
 import { useMessageListLogic } from "./use-message-list-logic.js";
-import { useStreamingReducer } from "./use-streaming-reducer.js";
+import { type StreamingAction, useStreamingReducer } from "./use-streaming-reducer.js";
 
 interface UseSessionPageLogicProps {
   sessionId: string;
@@ -16,6 +18,7 @@ interface UseSessionPageLogicProps {
 export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   const location = useLocation();
   const initialMessageSent = useRef(false);
+  const resumeAttempted = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Session detail
@@ -61,6 +64,46 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     }
   }, [location.state, chatSend]);
 
+  // Resume active generation on reconnect (Phase 6.7)
+  useEffect(() => {
+    if (resumeAttempted.current || streamingState.isStreaming) return;
+    resumeAttempted.current = true;
+
+    const resume = async () => {
+      try {
+        const { data } = await apiClient.get<ActiveGeneration>(
+          `/sessions/${props.sessionId}/chat/active`,
+        );
+        if (!data.active || !data.responseId) return;
+
+        const responseId = data.responseId;
+        dispatch({ type: "RESPONSE_START", responseId });
+
+        const controller = new AbortController();
+        await createSseClient({
+          url: `/api/sessions/${props.sessionId}/chat/${responseId}/resume`,
+          method: "GET",
+          signal: controller.signal,
+          onEvent: (_eventType, eventData) => {
+            try {
+              const parsed = JSON.parse(eventData) as SseEvent;
+              dispatchSseEvent(parsed, dispatch);
+            } catch {
+              // Ignore malformed events
+            }
+          },
+          onError: (error) => {
+            dispatch({ type: "ERROR", error: error.message });
+          },
+        });
+      } catch {
+        // No active generation or network error — ignore
+      }
+    };
+
+    resume();
+  }, [props.sessionId, dispatch, streamingState.isStreaming]);
+
   return {
     session: sessionQuery.data ?? null,
     messageListProps: {
@@ -80,4 +123,53 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     streamingError: streamingState.error,
     askUser: streamingState.askUser,
   };
+};
+
+const dispatchSseEvent = (event: SseEvent, dispatch: (action: StreamingAction) => void) => {
+  switch (event.type) {
+    case "response_start":
+      dispatch({ type: "RESPONSE_START", responseId: event.responseId });
+      break;
+    case "text_delta":
+      dispatch({ type: "TEXT_DELTA", text: event.text });
+      break;
+    case "tool_call_start":
+      dispatch({ type: "TOOL_CALL_START", toolCallId: event.toolCallId, name: event.name });
+      break;
+    case "tool_call_delta":
+      dispatch({
+        type: "TOOL_CALL_DELTA",
+        toolCallId: event.toolCallId,
+        argumentsDelta: event.argumentsDelta,
+      });
+      break;
+    case "tool_call_end":
+      dispatch({ type: "TOOL_CALL_END", toolCallId: event.toolCallId });
+      break;
+    case "tool_result":
+      dispatch({
+        type: "TOOL_RESULT",
+        toolCallId: event.toolCallId,
+        content: event.content,
+        isError: event.isError,
+      });
+      break;
+    case "ask_user":
+      dispatch({
+        type: "ASK_USER",
+        toolCallId: event.toolCallId,
+        question: event.question,
+        options: event.options,
+      });
+      break;
+    case "message_complete":
+      dispatch({ type: "MESSAGE_COMPLETE", message: event.message });
+      break;
+    case "done":
+      dispatch({ type: "DONE", usage: event.usage });
+      break;
+    case "error":
+      dispatch({ type: "ERROR", error: event.error });
+      break;
+  }
 };
