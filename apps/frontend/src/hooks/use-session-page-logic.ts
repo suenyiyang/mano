@@ -21,9 +21,6 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const initialMessageSent = useRef<string | null>(null);
-  const resumeAttempted = useRef(false);
-  const sendingRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Session detail
@@ -50,13 +47,17 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   // Auto-scroll
   const autoScroll = useAutoScroll(scrollRef, [messageList.turns, streamingState.contentBlocks]);
 
-  // Clear pending user message only when streaming transitions from true → false
+  // When streaming transitions true → false: refetch messages, then clear streaming blocks
   useEffect(() => {
     if (wasStreaming.current && !streamingState.isStreaming) {
       setPendingUserMessage(null);
+      // Refetch persisted messages, then clear streaming blocks so turns take over
+      queryClient
+        .invalidateQueries({ queryKey: ["messages", props.sessionId] })
+        .then(() => dispatch({ type: "RESET" }));
     }
     wasStreaming.current = streamingState.isStreaming;
-  }, [streamingState.isStreaming]);
+  }, [streamingState.isStreaming, props.sessionId, queryClient, dispatch]);
 
   // Send handler
   const handleSend = useCallback(
@@ -128,47 +129,64 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     [props.sessionId, streamingState.askUser, streamingState.responseId, dispatch],
   );
 
-  const handleAskUserClose = useCallback(() => {
+  const handleAskUserClose = useCallback(async () => {
+    if (streamingState.askUser && streamingState.responseId) {
+      try {
+        await apiClient.post(`/sessions/${props.sessionId}/chat/respond`, {
+          responseId: streamingState.responseId,
+          toolCallId: streamingState.askUser.toolCallId,
+          type: "ask_user_answer",
+          payload: { answer: "user_reject_to_answer" },
+        });
+      } catch {
+        // Best-effort
+      }
+    }
     dispatch({ type: "CLEAR_ASK_USER" });
-  }, [dispatch]);
+  }, [props.sessionId, streamingState.askUser, streamingState.responseId, dispatch]);
 
   // Reset streaming state when switching sessions
   useEffect(() => {
     dispatch({ type: "RESET" });
     setPendingUserMessage(null);
-    resumeAttempted.current = false;
-    sendingRef.current = false;
   }, [props.sessionId, dispatch]);
 
   // Handle initial message from new chat navigation
   useEffect(() => {
     const state = location.state as { initialMessage?: string } | null;
-    if (state?.initialMessage && initialMessageSent.current !== props.sessionId) {
-      initialMessageSent.current = props.sessionId;
-      sendingRef.current = true;
-      setPendingUserMessage(state.initialMessage);
-      chatSend.send(state.initialMessage);
-      // Clear the navigation state
-      window.history.replaceState({}, "");
-    }
-  }, [location.state, chatSend, props.sessionId]);
+    if (!state?.initialMessage) return;
 
-  // Resume active generation on reconnect (Phase 6.7)
+    const controller = new AbortController();
+    setPendingUserMessage(state.initialMessage);
+    chatSend.send(state.initialMessage, controller.signal);
+    // Clear navigation state via React Router (window.history.replaceState doesn't update useLocation)
+    navigate(location.pathname, { replace: true, state: {} });
+
+    return () => {
+      controller.abort();
+    };
+  }, [props.sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Resume active generation on reconnect (e.g. page refresh mid-generation).
+  // Only depends on sessionId — NOT on streamingState.isStreaming, because
+  // dispatching RESPONSE_START would re-trigger cleanup and abort the resume SSE.
   useEffect(() => {
-    if (resumeAttempted.current || streamingState.isStreaming || sendingRef.current) return;
-    resumeAttempted.current = true;
+    // Skip resume when an initial message will be sent by the effect above
+    const navState = location.state as { initialMessage?: string } | null;
+    if (navState?.initialMessage) return;
+
+    const controller = new AbortController();
 
     const resume = async () => {
       try {
         const { data } = await apiClient.get<ActiveGeneration>(
           `/sessions/${props.sessionId}/chat/active`,
         );
-        if (!data.active || !data.responseId) return;
+        if (controller.signal.aborted || !data.active || !data.responseId) return;
 
         const responseId = data.responseId;
         dispatch({ type: "RESPONSE_START", responseId });
 
-        const controller = new AbortController();
         await createSseClient({
           url: `/api/sessions/${props.sessionId}/chat/${responseId}/resume`,
           method: "GET",
@@ -210,7 +228,11 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     };
 
     resume();
-  }, [props.sessionId, dispatch, streamingState.isStreaming]);
+
+    return () => {
+      controller.abort();
+    };
+  }, [props.sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const session = sessionQuery.data ?? null;
 

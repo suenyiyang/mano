@@ -15,11 +15,28 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
-    async (content: string) => {
+    async (content: string, externalSignal?: AbortSignal) => {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Optimistically add the user message to the cache
+      // Link external signal (e.g. from useEffect cleanup) to internal controller
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          controller.abort();
+          return;
+        }
+        externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+      }
+
+      // Cancel in-flight queries so they don't overwrite the optimistic data
+      await queryClient.cancelQueries({ queryKey: ["messages", props.sessionId] });
+
+      // If the signal was aborted during the await (e.g. StrictMode cleanup), bail out
+      if (controller.signal.aborted) return;
+
+      // Optimistically add the user message to the cache.
+      // Remove any existing optimistic messages first to prevent duplicates
+      // (e.g. React 19 StrictMode double-firing effects).
       queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
         ["messages", props.sessionId],
         (old) => {
@@ -44,7 +61,10 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
               pageParams: [undefined],
             };
           }
-          const pages = [...old.pages];
+          const pages = old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.filter((m) => !m.id.startsWith("optimistic-")),
+          }));
           const lastPageIndex = pages.length - 1;
           const lastPage = pages[lastPageIndex];
           if (lastPage) {

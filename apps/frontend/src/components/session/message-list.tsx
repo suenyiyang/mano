@@ -47,12 +47,12 @@ export const MessageList: FC<MessageListProps> = (props) => {
             />
           )}
 
-        {/* Live streaming content */}
-        {props.isStreaming && props.streamingBlocks.length > 0 && (
+        {/* Live streaming content (kept visible after streaming ends until turns refresh) */}
+        {(props.isStreaming || props.streamingBlocks.length > 0) && (
           <AgentMessage
             timestamp={new Date().toISOString()}
             blocks={props.streamingBlocks}
-            isStreaming
+            isStreaming={props.isStreaming}
           />
         )}
       </div>

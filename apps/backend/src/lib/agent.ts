@@ -82,11 +82,17 @@ export interface CreateAgentOptions {
   sandbox?: Sandbox;
 }
 
+const BASE_TOOL_INSTRUCTION =
+  "When using tools, always briefly explain what you are about to do and why before making each set of tool calls. For example, say 'Let me search for that information' before calling web_search. Never make tool calls without first providing a short text explanation to the user.";
+
 /**
  * Create a fully configured agent with all middleware for a session.
  */
 export const createAgentForSession = async (options: CreateAgentOptions) => {
-  const { model, systemPrompt, db, userId, askUserResolver, sandbox } = options;
+  const { model, db, userId, askUserResolver, sandbox } = options;
+  const systemPrompt = options.systemPrompt
+    ? `${BASE_TOOL_INSTRUCTION}\n\n${options.systemPrompt}`
+    : BASE_TOOL_INSTRUCTION;
 
   const middleware: AgentMiddleware[] = [];
 

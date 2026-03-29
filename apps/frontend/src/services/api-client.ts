@@ -19,6 +19,8 @@ apiClient.interceptors.request.use((config) => {
 
 // Handle 401 with silent token refresh
 let isRefreshing = false;
+let lastRefreshTime = 0;
+const REFRESH_COOLDOWN_MS = 5000;
 let failedQueue: Array<{
   resolve: (token: string) => void;
   reject: (error: unknown) => void;
@@ -50,10 +52,16 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // Cooldown: if we recently refreshed and still getting 401, don't retry
+    if (Date.now() - lastRefreshTime < REFRESH_COOLDOWN_MS) {
+      return Promise.reject(error);
+    }
+
     if (isRefreshing) {
       return new Promise<string>((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       }).then((token) => {
+        originalRequest._retry = true;
         originalRequest.headers.Authorization = `Bearer ${token}`;
         return apiClient(originalRequest);
       });
@@ -66,7 +74,6 @@ apiClient.interceptors.response.use(
     if (!refreshTokenValue) {
       isRefreshing = false;
       authToken.clear();
-      window.location.href = "/login";
       return Promise.reject(error);
     }
 
@@ -77,13 +84,13 @@ apiClient.interceptors.response.use(
       const newToken = data.token;
       const newRefreshToken = data.refreshToken ?? refreshTokenValue;
       authToken.set(newToken, newRefreshToken);
+      lastRefreshTime = Date.now();
       processQueue(null, newToken);
       originalRequest.headers.Authorization = `Bearer ${newToken}`;
       return apiClient(originalRequest);
     } catch (refreshError) {
       processQueue(refreshError, null);
       authToken.clear();
-      window.location.href = "/login";
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

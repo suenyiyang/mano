@@ -10,8 +10,15 @@ export const createSseStream = (onStream: (send: SseSender) => Promise<void>) =>
 
   return new ReadableStream({
     async start(controller) {
+      let closed = false;
+
       const send: SseSender = (id, event, data) => {
-        controller.enqueue(encoder.encode(formatSseEvent(id, event, data)));
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(formatSseEvent(id, event, data)));
+        } catch {
+          closed = true;
+        }
       };
 
       try {
@@ -20,7 +27,13 @@ export const createSseStream = (onStream: (send: SseSender) => Promise<void>) =>
         const message = error instanceof Error ? error.message : "Unknown error";
         send("error", "error", { error: message, code: "INTERNAL_ERROR" });
       } finally {
-        controller.close();
+        if (!closed) {
+          try {
+            controller.close();
+          } catch {
+            // Controller already closed
+          }
+        }
       }
     },
   });
