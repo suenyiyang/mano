@@ -1,5 +1,6 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { StructuredToolInterface } from "@langchain/core/tools";
+import type { AgentMiddleware } from "langchain";
 
 export type ModelProvider = "volcengine" | "openai" | "anthropic";
 
@@ -28,4 +29,5 @@ export interface ManoAgentConfig {
   model: BaseChatModel;
   systemPrompt?: string;
   tools?: StructuredToolInterface[];
+  middleware?: AgentMiddleware[];
 }

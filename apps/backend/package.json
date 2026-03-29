@@ -15,6 +15,7 @@
     "@hono/node-server": "catalog:",
     "@langchain/core": "catalog:",
     "@mano/agent": "workspace:*",
+    "langchain": "catalog:",
     "bcrypt": "^6.0.0",
     "drizzle-orm": "^0.45.2",
     "hono": "catalog:",

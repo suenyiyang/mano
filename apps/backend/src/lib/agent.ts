@@ -1,8 +1,20 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { BaseMessage } from "@langchain/core/messages";
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import type { ModelConfig, ModelProvider } from "@mano/agent";
-import { createManoAgent, createModel } from "@mano/agent";
+import type { AskUserResolver, ModelConfig, ModelProvider, SkillResolver } from "@mano/agent";
+import {
+  createAskUserMiddleware,
+  createManoAgent,
+  createMcpMiddleware,
+  createModel,
+  createSkillMiddleware,
+  createToolSearchMiddleware,
+  webSearchMiddleware,
+} from "@mano/agent";
+import type { AgentMiddleware } from "langchain";
+import type { Db } from "../db/index.js";
+import { findEnabledMcpServersByUser } from "../db/queries/mcp-servers.js";
+import { findSkillByName } from "../db/queries/skills.js";
 import type { modelTiers } from "../db/schema.js";
 import { getEnv } from "../env.js";
 
@@ -66,7 +78,74 @@ export const createModelInstance = (row: ModelTierRow): BaseChatModel => {
   return createModel(factory());
 };
 
-export const createAgentForSession = (model: BaseChatModel, systemPrompt: string) => {
+export interface CreateAgentOptions {
+  model: BaseChatModel;
+  systemPrompt: string;
+  db: Db;
+  userId: string;
+  askUserResolver?: AskUserResolver;
+}
+
+/**
+ * Create a fully configured agent with all middleware for a session.
+ */
+export const createAgentForSession = async (options: CreateAgentOptions) => {
+  const { model, systemPrompt, db, userId, askUserResolver } = options;
+
+  const middleware: AgentMiddleware[] = [];
+
+  // Web search middleware
+  middleware.push(webSearchMiddleware);
+
+  // Skill middleware — resolves skills from DB
+  const skillResolver: SkillResolver = async (name) => {
+    const skill = await findSkillByName(db, userId, name);
+    if (!skill) return null;
+    return {
+      name: skill.name,
+      displayName: skill.displayName,
+      description: skill.description,
+      content: skill.content,
+    };
+  };
+  middleware.push(createSkillMiddleware({ resolver: skillResolver }));
+
+  // Ask user middleware — blocks until user responds via /respond
+  if (askUserResolver) {
+    middleware.push(createAskUserMiddleware({ resolver: askUserResolver }));
+  }
+
+  // MCP middleware — connect to user's enabled MCP servers
+  let mcpManager: ReturnType<typeof createMcpMiddleware>["mcpManager"] | undefined;
+  try {
+    const mcpConfigs = await findEnabledMcpServersByUser(db, userId);
+    if (mcpConfigs.length > 0) {
+      const mcpResult = createMcpMiddleware({
+        servers: mcpConfigs.map((config) => ({
+          name: config.name,
+          transport: config.transport as "stdio" | "sse" | "streamable-http",
+          command: config.command ?? undefined,
+          args: (config.args as string[]) ?? undefined,
+          url: config.url ?? undefined,
+          env: (config.env as Record<string, string>) ?? undefined,
+        })),
+      });
+      middleware.push(mcpResult.middleware);
+      mcpManager = mcpResult.mcpManager;
+    }
+  } catch {
+    // If MCP loading fails entirely, continue without MCP tools
+  }
+
+  // Tool search middleware — should be last so it can discover all other tools
+  middleware.push(createToolSearchMiddleware());
+
+  const agent = createManoAgent({ model, middleware, systemPrompt });
+
+  return { agent, mcpManager };
+};
+
+export const createSimpleAgent = (model: BaseChatModel, systemPrompt: string) => {
   return createManoAgent({ model, systemPrompt });
 };
 

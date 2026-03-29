@@ -22,7 +22,7 @@ import {
 import { generateResponseId } from "../lib/id.js";
 import { createSseStream, SSE_HEADERS, type SseSender } from "../lib/sse.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { conflict, forbidden, notFound } from "../middleware/error-handler.js";
+import { badRequest, conflict, forbidden, notFound } from "../middleware/error-handler.js";
 
 const chatSendSchema = z.object({
   content: z.string().min(1),
@@ -48,6 +48,9 @@ const chatRespondSchema = z.object({
 // Track active AbortControllers and EventEmitters for cancellation and resume
 const activeControllers = new Map<string, AbortController>();
 const activeEmitters = new Map<string, EventEmitter>();
+
+// Track pending ask_user questions: responseId -> resolver
+const pendingAskUser = new Map<string, { resolve: (answer: string) => void }>();
 
 interface SseEvent {
   id: string;
@@ -130,6 +133,9 @@ chatRoutes.post("/:id/chat/send", async (c) => {
   const stream = createSseStream(async (send) => {
     const emit = createEventSender(db, responseId, session.id, send, emitter);
 
+    // MCP manager reference for cleanup
+    let mcpManager: Awaited<ReturnType<typeof createAgentForSession>>["mcpManager"] | undefined;
+
     try {
       await emit("response_start", { responseId });
 
@@ -141,8 +147,23 @@ chatRoutes.post("/:id/chat/send", async (c) => {
       const modelRow = pickModel(models);
       const model = createModelInstance(modelRow);
 
-      // Create agent
-      const agent = createAgentForSession(model, session.systemPrompt);
+      // Create ask_user resolver that blocks until user responds via /respond
+      const askUserResolver = (_question: string, _options?: string[]): Promise<string> => {
+        return new Promise((resolve) => {
+          pendingAskUser.set(responseId, { resolve });
+        });
+      };
+
+      // Create agent with all tools
+      const result = await createAgentForSession({
+        model,
+        systemPrompt: session.systemPrompt,
+        db,
+        userId: c.var.userId,
+        askUserResolver,
+      });
+      mcpManager = result.mcpManager;
+      const agent = result.agent;
 
       // Build conversation history
       const dbMessages = await findAllMessagesBySession(db, session.id);
@@ -213,6 +234,15 @@ chatRoutes.post("/:id/chat/send", async (c) => {
           if (Array.isArray(toolCalls)) {
             for (const tc of toolCalls) {
               await emit("tool_call_end", { toolCallId: tc.id });
+
+              // Emit ask_user SSE event when agent calls ask_user
+              if (tc.name === "ask_user") {
+                await emit("ask_user", {
+                  toolCallId: tc.id,
+                  question: tc.args?.question,
+                  options: tc.args?.options,
+                });
+              }
             }
           }
 
@@ -294,8 +324,13 @@ chatRoutes.post("/:id/chat/send", async (c) => {
       }
     } finally {
       activeControllers.delete(responseId);
+      pendingAskUser.delete(responseId);
       emitter.emit("done");
       activeEmitters.delete(responseId);
+      // Clean up MCP connections
+      if (mcpManager) {
+        mcpManager.disconnectAll().catch(() => {});
+      }
     }
   });
 
@@ -304,7 +339,22 @@ chatRoutes.post("/:id/chat/send", async (c) => {
 
 // Terminate in-progress generation
 chatRoutes.post("/:id/chat/terminate", async (c) => {
+  const db = c.var.db;
+  const session = await findSessionById(db, c.req.param("id"));
+  if (!session) {
+    throw notFound("Session not found");
+  }
+  if (session.userId !== c.var.userId) {
+    throw forbidden();
+  }
+
   const body = chatTerminateSchema.parse(await c.req.json());
+
+  // Verify the generation belongs to this session
+  const generation = await findGenerationByResponseId(db, body.responseId);
+  if (!generation || generation.sessionId !== session.id) {
+    throw notFound("Generation not found for this session");
+  }
 
   const controller = activeControllers.get(body.responseId);
   if (controller) {
@@ -312,7 +362,13 @@ chatRoutes.post("/:id/chat/terminate", async (c) => {
     activeControllers.delete(body.responseId);
   }
 
-  const db = c.var.db;
+  // Resolve any pending ask_user with empty answer to unblock the tool
+  const pending = pendingAskUser.get(body.responseId);
+  if (pending) {
+    pending.resolve("");
+    pendingAskUser.delete(body.responseId);
+  }
+
   await updateGenerationStatus(db, body.responseId, "cancelled");
 
   return c.json({ success: true });
@@ -329,11 +385,53 @@ chatRoutes.post("/:id/chat/respond", async (c) => {
     throw forbidden();
   }
 
-  // Validate input shape even though we don't use it yet
-  chatRespondSchema.parse(await c.req.json());
+  const body = chatRespondSchema.parse(await c.req.json());
 
-  // TODO: Wire up to the agent loop's interrupt mechanism (Phase 3)
-  return c.json({ success: true, message: "Response acknowledged (agent loop not yet wired)" });
+  // Verify the generation belongs to this session and is running
+  const generation = await findGenerationByResponseId(db, body.responseId);
+  if (!generation || generation.sessionId !== session.id) {
+    throw notFound("Generation not found for this session");
+  }
+  if (generation.status !== "running") {
+    throw badRequest("Generation is not in progress");
+  }
+
+  if (body.type === "ask_user_answer") {
+    const pending = pendingAskUser.get(body.responseId);
+    if (!pending) {
+      throw badRequest("No pending question for this response");
+    }
+
+    // Build the answer from payload
+    const answer = body.payload.selectedOptions?.length
+      ? body.payload.selectedOptions.join(", ")
+      : (body.payload.answer ?? "");
+
+    pending.resolve(answer);
+    pendingAskUser.delete(body.responseId);
+
+    return c.json({ success: true });
+  }
+
+  if (body.type === "hitl_approval") {
+    // HITL approval resolves the pending ask_user with approval/rejection info
+    // that the agent can interpret
+    const pending = pendingAskUser.get(body.responseId);
+    if (!pending) {
+      throw badRequest("No pending approval for this response");
+    }
+
+    if (body.payload.approved) {
+      pending.resolve("APPROVED");
+    } else {
+      pending.resolve(`REJECTED: ${body.payload.reason ?? "No reason provided"}`);
+    }
+    pendingAskUser.delete(body.responseId);
+
+    return c.json({ success: true });
+  }
+
+  throw badRequest(`Unknown response type: ${body.type}`);
 });
 
 // Check for active generation

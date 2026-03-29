@@ -5,14 +5,17 @@ vi.mock("deepagents", () => ({
     ({
       model,
       tools,
+      middleware,
       systemPrompt,
     }: {
       model: unknown;
       tools: unknown[];
+      middleware: unknown[];
       systemPrompt?: string;
     }) => ({
       model,
       tools,
+      middleware,
       systemPrompt,
     }),
   ),
@@ -21,6 +24,7 @@ vi.mock("deepagents", () => ({
 interface MockAgent {
   model: unknown;
   tools: unknown[];
+  middleware: unknown[];
   systemPrompt: string | undefined;
 }
 
@@ -49,5 +53,27 @@ describe("createManoAgent", () => {
 
     expect(agent.tools).toHaveLength(1);
     expect(agent.tools[0]).toBe(fakeTool);
+  });
+
+  it("passes middleware through to createDeepAgent", async () => {
+    const { createManoAgent } = await import("./agent.js");
+    const fakeMiddleware = { name: "testMiddleware" };
+    const agent = createManoAgent({
+      model: {} as never,
+      middleware: [fakeMiddleware as never],
+    }) as unknown as MockAgent;
+
+    expect(agent.middleware).toHaveLength(1);
+    expect(agent.middleware[0]).toBe(fakeMiddleware);
+  });
+
+  it("defaults to empty tools and middleware when not provided", async () => {
+    const { createManoAgent } = await import("./agent.js");
+    const agent = createManoAgent({
+      model: {} as never,
+    }) as unknown as MockAgent;
+
+    expect(agent.tools).toEqual([]);
+    expect(agent.middleware).toEqual([]);
   });
 });

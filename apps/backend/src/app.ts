@@ -5,7 +5,9 @@ import { requestId } from "./middleware/request-id.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
 import { healthRoutes } from "./routes/health.js";
+import { mcpServerRoutes } from "./routes/mcp-servers.js";
 import { messageRoutes } from "./routes/messages.js";
+import { modelRoutes } from "./routes/models.js";
 import { sessionRoutes } from "./routes/sessions.js";
 
 export type AppEnv = {
@@ -28,6 +30,8 @@ app.route("/api/auth", authRoutes);
 app.route("/api/sessions", sessionRoutes);
 app.route("/api/sessions", messageRoutes);
 app.route("/api/sessions", chatRoutes);
+app.route("/api/mcp-servers", mcpServerRoutes);
+app.route("/api/models", modelRoutes);
 
 app.get("/", (c) => c.json({ message: "Mano API" }));
 
