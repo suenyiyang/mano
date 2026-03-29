@@ -83,6 +83,9 @@ importers:
       '@hono/node-server':
         specifier: 'catalog:'
         version: 1.19.11(hono@4.12.9)
+      '@langchain/core':
+        specifier: 'catalog:'
+        version: 1.1.36(openai@6.33.0(zod@3.25.76))
       '@mano/agent':
         specifier: workspace:*
         version: link:../../packages/agent

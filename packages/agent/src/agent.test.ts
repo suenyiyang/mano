@@ -1,43 +1,53 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("deepagents", () => ({
-  createDeepAgent: vi.fn(({ tools, systemPrompt }: { tools: unknown[]; systemPrompt: string }) => ({
-    tools,
-    systemPrompt,
-  })),
+  createDeepAgent: vi.fn(
+    ({
+      model,
+      tools,
+      systemPrompt,
+    }: {
+      model: unknown;
+      tools: unknown[];
+      systemPrompt?: string;
+    }) => ({
+      model,
+      tools,
+      systemPrompt,
+    }),
+  ),
 }));
 
-vi.mock("langchain", async () => {
-  return {
-    tool: vi.fn((fn: (...args: unknown[]) => unknown, config: Record<string, unknown>) => ({
-      fn,
-      ...config,
-    })),
-  };
-});
-
 interface MockAgent {
-  tools: { name: string; fn: (input: { query: string }) => Promise<string> }[];
-  systemPrompt: string;
+  model: unknown;
+  tools: unknown[];
+  systemPrompt: string | undefined;
 }
 
-describe("createAgent", () => {
-  it("creates an agent with the echo tool", async () => {
-    const { createAgent } = await import("./agent.js");
-    const agent = createAgent("Test system prompt") as unknown as MockAgent;
+describe("createManoAgent", () => {
+  it("creates an agent with a model and system prompt", async () => {
+    const { createManoAgent } = await import("./agent.js");
+    const fakeModel = { _modelType: () => "test" };
+    const agent = createManoAgent({
+      model: fakeModel as never,
+      systemPrompt: "You are a helpful assistant",
+    }) as unknown as MockAgent;
 
     expect(agent).toBeDefined();
-    expect(agent.systemPrompt).toBe("Test system prompt");
-    expect(agent.tools).toHaveLength(1);
-    expect(agent.tools[0].name).toBe("echo");
+    expect(agent.model).toBe(fakeModel);
+    expect(agent.systemPrompt).toBe("You are a helpful assistant");
+    expect(agent.tools).toEqual([]);
   });
 
-  it("echo tool returns expected format", async () => {
-    const { createAgent } = await import("./agent.js");
-    const agent = createAgent("Test prompt") as unknown as MockAgent;
+  it("passes custom tools through to createDeepAgent", async () => {
+    const { createManoAgent } = await import("./agent.js");
+    const fakeTool = { name: "test_tool" };
+    const agent = createManoAgent({
+      model: {} as never,
+      tools: [fakeTool as never],
+    }) as unknown as MockAgent;
 
-    const echoTool = agent.tools[0];
-    const result = await echoTool.fn({ query: "hello" });
-    expect(result).toBe("Echo: hello");
+    expect(agent.tools).toHaveLength(1);
+    expect(agent.tools[0]).toBe(fakeTool);
   });
 });

@@ -1,21 +1,10 @@
 import { createDeepAgent } from "deepagents";
-import { tool } from "langchain";
-import { z } from "zod";
+import type { ManoAgentConfig } from "./types.js";
 
-export function createAgent(systemPrompt: string) {
-  const echoTool = tool(
-    async ({ query }) => {
-      return `Echo: ${query}`;
-    },
-    {
-      name: "echo",
-      description: "Echoes the input back",
-      schema: z.object({ query: z.string() }),
-    },
-  );
-
+export const createManoAgent = (config: ManoAgentConfig) => {
   return createDeepAgent({
-    tools: [echoTool],
-    systemPrompt,
+    model: config.model,
+    tools: config.tools ?? [],
+    systemPrompt: config.systemPrompt,
   });
-}
+};

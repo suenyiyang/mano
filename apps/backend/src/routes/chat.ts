@@ -1,17 +1,26 @@
+import { EventEmitter } from "node:events";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app.js";
+import type { Db } from "../db/index.js";
 import {
   findActiveGeneration,
   findGenerationByResponseId,
   insertActiveGeneration,
   updateGenerationStatus,
 } from "../db/queries/active-generations.js";
-import { getNextOrdinal, insertMessage } from "../db/queries/messages.js";
+import { findAllMessagesBySession, getNextOrdinal, insertMessage } from "../db/queries/messages.js";
+import { findEnabledModelsByTier } from "../db/queries/models.js";
 import { findSessionById } from "../db/queries/sessions.js";
 import { findEventsAfter, insertSseEvent } from "../db/queries/sse-events.js";
+import {
+  createAgentForSession,
+  createModelInstance,
+  dbMessagesToLangChain,
+  pickModel,
+} from "../lib/agent.js";
 import { generateResponseId } from "../lib/id.js";
-import { createSseStream, SSE_HEADERS } from "../lib/sse.js";
+import { createSseStream, SSE_HEADERS, type SseSender } from "../lib/sse.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { conflict, forbidden, notFound } from "../middleware/error-handler.js";
 
@@ -36,8 +45,44 @@ const chatRespondSchema = z.object({
   }),
 });
 
-// Track active AbortControllers for cancellation
+// Track active AbortControllers and EventEmitters for cancellation and resume
 const activeControllers = new Map<string, AbortController>();
+const activeEmitters = new Map<string, EventEmitter>();
+
+interface SseEvent {
+  id: string;
+  event: string;
+  data: unknown;
+}
+
+/**
+ * Helper: send an SSE event, persist it, and broadcast for resume subscribers.
+ */
+const createEventSender = (
+  db: Db,
+  responseId: string,
+  sessionId: string,
+  send: SseSender,
+  emitter: EventEmitter,
+) => {
+  let counter = 0;
+
+  return async (event: string, data: unknown) => {
+    const id = String(counter++);
+    send(id, event, data);
+
+    // Persist for resume
+    const stored = await insertSseEvent(db, {
+      responseId,
+      sessionId,
+      eventType: event,
+      data,
+    });
+
+    // Broadcast for live resume subscribers
+    emitter.emit("event", { id: String(stored.id), event, data } satisfies SseEvent);
+  };
+};
 
 export const chatRoutes = new Hono<AppEnv>();
 
@@ -76,47 +121,181 @@ chatRoutes.post("/:id/chat/send", async (c) => {
   // Track active generation
   await insertActiveGeneration(db, { responseId, sessionId: session.id });
 
-  // Set up abort controller
+  // Set up abort controller and emitter for resume
   const controller = new AbortController();
   activeControllers.set(responseId, controller);
+  const emitter = new EventEmitter();
+  activeEmitters.set(responseId, emitter);
 
   const stream = createSseStream(async (send) => {
+    const emit = createEventSender(db, responseId, session.id, send, emitter);
+
     try {
-      send("0", "response_start", { responseId });
+      await emit("response_start", { responseId });
 
-      // TODO: Wire up the actual agent loop here
-      // For now, echo back a placeholder response
-      const assistantOrdinal = ordinal + 1;
+      // Load model for this session's tier
+      const models = await findEnabledModelsByTier(db, session.modelTier);
+      if (models.length === 0) {
+        throw new Error(`No enabled models for tier "${session.modelTier}"`);
+      }
+      const modelRow = pickModel(models);
+      const model = createModelInstance(modelRow);
 
-      send("1", "text_delta", { text: "I received your message: " });
-      send("2", "text_delta", { text: body.content });
+      // Create agent
+      const agent = createAgentForSession(model, session.systemPrompt);
 
-      // Save assistant message
-      const assistantMessage = await insertMessage(db, {
-        sessionId: session.id,
-        role: "assistant",
-        content: `I received your message: ${body.content}`,
-        ordinal: assistantOrdinal,
-        responseId,
-      });
+      // Build conversation history
+      const dbMessages = await findAllMessagesBySession(db, session.id);
+      const langchainMessages = dbMessagesToLangChain(dbMessages);
 
-      // Store SSE events for resume
-      await insertSseEvent(db, {
-        responseId,
-        sessionId: session.id,
-        eventType: "message_complete",
-        data: { message: assistantMessage },
-      });
+      // Stream agent events
+      let nextOrdinal = ordinal + 1;
+      let accumulatedText = "";
+      const toolCallNames = new Map<string, string>();
+      let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
-      send("3", "message_complete", { message: assistantMessage });
-      send("4", "done", { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
+      const eventStream = agent.streamEvents(
+        { messages: langchainMessages },
+        { version: "v2", signal: controller.signal },
+      );
 
+      for await (const event of eventStream) {
+        if (controller.signal.aborted) break;
+
+        // LLM token streaming
+        if (event.event === "on_chat_model_stream") {
+          const chunk = event.data?.chunk;
+          if (!chunk) continue;
+
+          // Text content
+          const textContent =
+            typeof chunk.content === "string"
+              ? chunk.content
+              : Array.isArray(chunk.content)
+                ? chunk.content
+                    .filter((b: { type: string }) => b.type === "text")
+                    .map((b: { text: string }) => b.text)
+                    .join("")
+                : "";
+
+          if (textContent) {
+            accumulatedText += textContent;
+            await emit("text_delta", { text: textContent });
+          }
+
+          // Tool call chunks
+          const toolChunks = chunk.tool_call_chunks;
+          if (Array.isArray(toolChunks)) {
+            for (const tc of toolChunks) {
+              if (tc.id && tc.name && !toolCallNames.has(tc.id)) {
+                toolCallNames.set(tc.id, tc.name);
+                await emit("tool_call_start", {
+                  toolCallId: tc.id,
+                  name: tc.name,
+                });
+              }
+              if (tc.args) {
+                await emit("tool_call_delta", {
+                  toolCallId: tc.id ?? tc.index?.toString(),
+                  argumentsDelta: tc.args,
+                });
+              }
+            }
+          }
+        }
+
+        // LLM finished generating (may have tool calls)
+        if (event.event === "on_chat_model_end") {
+          const output = event.data?.output;
+          const toolCalls = output?.tool_calls;
+
+          // Emit tool_call_end for each tool call
+          if (Array.isArray(toolCalls)) {
+            for (const tc of toolCalls) {
+              await emit("tool_call_end", { toolCallId: tc.id });
+            }
+          }
+
+          // Extract usage if available
+          const usage = output?.usage_metadata;
+          if (usage) {
+            totalUsage = {
+              promptTokens: usage.input_tokens ?? 0,
+              completionTokens: usage.output_tokens ?? 0,
+              totalTokens: (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
+            };
+          }
+
+          // Persist assistant message
+          if (accumulatedText || (Array.isArray(toolCalls) && toolCalls.length > 0)) {
+            const assistantMessage = await insertMessage(db, {
+              sessionId: session.id,
+              role: "assistant",
+              content: accumulatedText || "",
+              toolCalls: toolCalls ?? undefined,
+              ordinal: nextOrdinal++,
+              modelId: modelRow.apiModelId,
+              responseId,
+              tokenUsage: totalUsage,
+            });
+
+            await emit("message_complete", { message: assistantMessage });
+          }
+
+          // Reset for next LLM turn (after tool execution)
+          accumulatedText = "";
+        }
+
+        // Tool execution completed
+        if (event.event === "on_tool_end") {
+          const output = event.data?.output;
+          // output is a ToolMessage or a string
+          const content =
+            typeof output === "string"
+              ? output
+              : typeof output?.content === "string"
+                ? output.content
+                : JSON.stringify(output?.content ?? output);
+
+          const toolCallId = output?.tool_call_id ?? "";
+          const toolName = output?.name ?? toolCallNames.get(toolCallId) ?? event.name ?? "";
+          const isError = output?.status === "error";
+
+          // Persist tool message
+          const toolMessage = await insertMessage(db, {
+            sessionId: session.id,
+            role: "tool",
+            content,
+            toolCallId,
+            toolName,
+            ordinal: nextOrdinal++,
+            responseId,
+          });
+
+          await emit("tool_result", {
+            toolCallId,
+            content,
+            isError,
+          });
+
+          await emit("message_complete", { message: toolMessage });
+        }
+      }
+
+      await emit("done", { usage: totalUsage });
       await updateGenerationStatus(db, responseId, "completed");
     } catch (error) {
-      await updateGenerationStatus(db, responseId, "failed");
-      throw error;
+      if (controller.signal.aborted) {
+        await updateGenerationStatus(db, responseId, "cancelled");
+      } else {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        await emit("error", { error: message, code: "AGENT_ERROR" });
+        await updateGenerationStatus(db, responseId, "failed");
+      }
     } finally {
       activeControllers.delete(responseId);
+      emitter.emit("done");
+      activeEmitters.delete(responseId);
     }
   });
 
@@ -153,8 +332,7 @@ chatRoutes.post("/:id/chat/respond", async (c) => {
   // Validate input shape even though we don't use it yet
   chatRespondSchema.parse(await c.req.json());
 
-  // TODO: Wire up to the agent loop's interrupt mechanism
-  // For now, acknowledge the response
+  // TODO: Wire up to the agent loop's interrupt mechanism (Phase 3)
   return c.json({ success: true, message: "Response acknowledged (agent loop not yet wired)" });
 });
 
@@ -203,13 +381,26 @@ chatRoutes.get("/:id/chat/:responseId/resume", async (c) => {
       send(String(event.id), event.eventType, event.data);
     }
 
-    // If generation is still running, switch to live streaming
+    // If generation is still running, subscribe to live events
     if (generation.status === "running") {
-      // TODO: Subscribe to live events from the agent loop
-      // For now, just close after replaying stored events
-      send("resume_end", "done", {
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      });
+      const emitter = activeEmitters.get(responseId);
+      if (emitter) {
+        await new Promise<void>((resolve) => {
+          const onEvent = (sseEvent: SseEvent) => {
+            // Skip events we already replayed
+            if (afterId !== undefined && Number(sseEvent.id) <= afterId) return;
+            send(sseEvent.id, sseEvent.event, sseEvent.data);
+          };
+
+          const onDone = () => {
+            emitter.off("event", onEvent);
+            resolve();
+          };
+
+          emitter.on("event", onEvent);
+          emitter.once("done", onDone);
+        });
+      }
     }
   });
 
