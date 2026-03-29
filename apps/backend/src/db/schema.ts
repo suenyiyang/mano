@@ -216,3 +216,37 @@ export const tierRateLimits = pgTable("tier_rate_limits", {
   requestsPerDay: integer("requests_per_day").notNull(),
   tokensPerDay: integer("tokens_per_day").notNull(),
 });
+
+// ─── Rate Limit Usage Tracking ─────────────────────────────────────────────
+
+export const rateLimitUsage = pgTable(
+  "rate_limit_usage",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: text().notNull(), // YYYY-MM-DD
+    requestsUsed: integer("requests_used").notNull().default(0),
+    tokensUsed: integer("tokens_used").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("rate_limit_usage_user_date").on(t.userId, t.date),
+    index("idx_rate_limit_user_date").on(t.userId, t.date),
+  ],
+);
+
+// ─── Rate Limit Minute Window ──────────────────────────────────────────────
+
+export const rateLimitMinuteLog = pgTable(
+  "rate_limit_minute_log",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_rate_limit_minute").on(t.userId, t.createdAt)],
+);

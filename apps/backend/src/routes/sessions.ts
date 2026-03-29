@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app.js";
+import { findAllMessagesBySession, markMessagesCompacted } from "../db/queries/messages.js";
 import {
   deleteSession,
   findSessionById,
@@ -8,9 +9,10 @@ import {
   forkSession,
   insertSession,
   updateSession,
+  updateSessionCompaction,
 } from "../db/queries/sessions.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { forbidden, notFound } from "../middleware/error-handler.js";
+import { badRequest, forbidden, notFound } from "../middleware/error-handler.js";
 
 const createSessionSchema = z.object({
   title: z.string().optional(),
@@ -26,6 +28,11 @@ const updateSessionSchema = z.object({
 
 const forkSessionSchema = z.object({
   afterMessageId: z.string().uuid(),
+});
+
+const compactSessionSchema = z.object({
+  upToOrdinal: z.number().int().min(0),
+  summary: z.string().min(1),
 });
 
 export const sessionRoutes = new Hono<AppEnv>();
@@ -112,4 +119,37 @@ sessionRoutes.post("/:id/fork", async (c) => {
   const newSession = await forkSession(db, session.id, body.afterMessageId);
 
   return c.json({ session: newSession }, 201);
+});
+
+sessionRoutes.post("/:id/compact", async (c) => {
+  const db = c.var.db;
+  const session = await findSessionById(db, c.req.param("id"));
+  if (!session) {
+    throw notFound("Session not found");
+  }
+  if (session.userId !== c.var.userId) {
+    throw forbidden();
+  }
+
+  const body = compactSessionSchema.parse(await c.req.json());
+
+  // Verify there are messages to compact
+  const allMessages = await findAllMessagesBySession(db, session.id);
+  const messagesToCompact = allMessages.filter((m) => m.ordinal <= body.upToOrdinal);
+  if (messagesToCompact.length === 0) {
+    throw badRequest("No messages to compact at this ordinal");
+  }
+
+  const lastCompactedMessage = messagesToCompact[messagesToCompact.length - 1]!;
+
+  // Mark messages as compacted and update session
+  await markMessagesCompacted(db, session.id, body.upToOrdinal);
+  const updated = await updateSessionCompaction(
+    db,
+    session.id,
+    body.summary,
+    lastCompactedMessage.id,
+  );
+
+  return c.json({ session: updated });
 });

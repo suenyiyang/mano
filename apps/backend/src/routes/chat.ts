@@ -11,6 +11,7 @@ import {
 } from "../db/queries/active-generations.js";
 import { findAllMessagesBySession, getNextOrdinal, insertMessage } from "../db/queries/messages.js";
 import { findEnabledModelsByTier } from "../db/queries/models.js";
+import { addTokensToDailyUsage } from "../db/queries/rate-limits.js";
 import { findSessionById } from "../db/queries/sessions.js";
 import { findEventsAfter, insertSseEvent } from "../db/queries/sse-events.js";
 import {
@@ -23,6 +24,7 @@ import { generateResponseId } from "../lib/id.js";
 import { createSseStream, SSE_HEADERS, type SseSender } from "../lib/sse.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { badRequest, conflict, forbidden, notFound } from "../middleware/error-handler.js";
+import { rateLimitMiddleware } from "../middleware/rate-limit.js";
 
 const chatSendSchema = z.object({
   content: z.string().min(1),
@@ -92,7 +94,7 @@ export const chatRoutes = new Hono<AppEnv>();
 chatRoutes.use("/*", authMiddleware);
 
 // Send message and get SSE response
-chatRoutes.post("/:id/chat/send", async (c) => {
+chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
   const db = c.var.db;
   const session = await findSessionById(db, c.req.param("id"));
   if (!session) {
@@ -310,6 +312,18 @@ chatRoutes.post("/:id/chat/send", async (c) => {
 
           await emit("message_complete", { message: toolMessage });
         }
+      }
+
+      // Auto-compaction: if total tokens exceed threshold, compact older messages.
+      // DeepAgents' summarization middleware handles in-context compaction;
+      // here we persist that state to DB for the compact_summary field.
+      // We detect compaction by checking if the agent's context was trimmed
+      // (indicated by the summarization middleware modifying the message list).
+      // For now, emit done. The /compact endpoint handles explicit compaction.
+
+      // Track token usage for rate limiting
+      if (totalUsage.totalTokens > 0) {
+        await addTokensToDailyUsage(db, c.var.userId, totalUsage.totalTokens);
       }
 
       await emit("done", { usage: totalUsage });

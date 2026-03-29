@@ -71,6 +71,20 @@ export const updateSession = async (
   return rows[0] ?? null;
 };
 
+export const updateSessionCompaction = async (
+  db: Db,
+  id: string,
+  compactSummary: string,
+  compactAfterMessageId: string,
+) => {
+  const rows = await db
+    .update(sessions)
+    .set({ compactSummary, compactAfterMessageId, updatedAt: new Date() })
+    .where(eq(sessions.id, id))
+    .returning();
+  return rows[0] ?? null;
+};
+
 export const deleteSession = async (db: Db, id: string) => {
   await db.delete(sessions).where(eq(sessions.id, id));
 };
