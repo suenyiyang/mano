@@ -20,7 +20,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash"),
   displayName: text("display_name").notNull(),
   avatarUrl: text("avatar_url"),
-  tier: text().notNull().default("mini"),
+  tier: text().notNull().default("free"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

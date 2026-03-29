@@ -1,12 +1,13 @@
-import { useMutation } from "@tanstack/react-query";
+import { type InfiniteData, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useNavigate } from "react-router";
 import { apiClient } from "../services/api-client.js";
-import type { Session } from "../types/api.js";
+import type { PaginatedSessions, Session } from "../types/api.js";
 import { useChatInputLogic } from "./use-chat-input-logic.js";
 
 export const useNewChatPageLogic = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const createSession = useMutation({
     mutationFn: async (input: { title?: string }) => {
@@ -18,9 +19,24 @@ export const useNewChatPageLogic = () => {
   const handleSend = useCallback(
     async (content: string) => {
       const session = await createSession.mutateAsync({});
+
+      // Optimistically add the new session to the sidebar
+      queryClient.setQueryData<InfiniteData<PaginatedSessions>>(["sessions"], (old) => {
+        if (!old) return old;
+        const pages = [...old.pages];
+        const firstPage = pages[0];
+        if (firstPage) {
+          pages[0] = {
+            ...firstPage,
+            sessions: [session, ...firstPage.sessions],
+          };
+        }
+        return { ...old, pages };
+      });
+
       navigate(`/app/${session.id}`, { state: { initialMessage: content } });
     },
-    [createSession, navigate],
+    [createSession, navigate, queryClient],
   );
 
   const chatInputProps = useChatInputLogic(handleSend);

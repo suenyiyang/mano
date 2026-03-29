@@ -1,6 +1,7 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { type InfiniteData, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { createSseClient } from "../services/sse-client.js";
+import type { Message, PaginatedMessages } from "../types/api.js";
 import type { SseEvent } from "../types/sse-events.js";
 import type { StreamingAction } from "./use-streaming-reducer.js";
 
@@ -18,16 +19,58 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // Optimistically add the user message to the cache
+      queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+        ["messages", props.sessionId],
+        (old) => {
+          if (!old) return old;
+          const optimisticMessage: Message = {
+            id: `optimistic-${Date.now()}`,
+            sessionId: props.sessionId,
+            role: "user",
+            content,
+            toolCalls: null,
+            toolCallId: null,
+            toolName: null,
+            ordinal: Number.MAX_SAFE_INTEGER,
+            modelId: null,
+            responseId: null,
+            tokenUsage: null,
+            isCompacted: false,
+            createdAt: new Date().toISOString(),
+          };
+          const pages = [...old.pages];
+          const lastPageIndex = pages.length - 1;
+          const lastPage = pages[lastPageIndex];
+          if (lastPage) {
+            pages[lastPageIndex] = {
+              ...lastPage,
+              messages: [...lastPage.messages, optimisticMessage],
+            };
+          }
+          return { ...old, pages };
+        },
+      );
+
       try {
         await createSseClient({
           url: `/api/sessions/${props.sessionId}/chat/send`,
           method: "POST",
           body: { content },
           signal: controller.signal,
-          onEvent: (_eventType, data) => {
+          onEvent: (eventType, data) => {
             try {
-              const parsed = JSON.parse(data) as SseEvent;
-              dispatchSseEvent(parsed, props.dispatch);
+              const parsed = JSON.parse(data);
+              const event = { ...parsed, type: eventType } as SseEvent;
+
+              // Handle session updates via query cache, not streaming reducer
+              if (event.type === "session_update") {
+                queryClient.setQueryData(["session", props.sessionId], event.session);
+                queryClient.invalidateQueries({ queryKey: ["sessions"] });
+                return;
+              }
+
+              dispatchSseEvent(event, props.dispatch);
             } catch {
               // Ignore malformed events
             }

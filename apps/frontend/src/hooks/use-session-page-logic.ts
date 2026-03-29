@@ -170,10 +170,18 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
           url: `/api/sessions/${props.sessionId}/chat/${responseId}/resume`,
           method: "GET",
           signal: controller.signal,
-          onEvent: (_eventType, eventData) => {
+          onEvent: (eventType, eventData) => {
             try {
-              const parsed = JSON.parse(eventData) as SseEvent;
-              dispatchSseEvent(parsed, dispatch);
+              const parsed = JSON.parse(eventData);
+              const event = { ...parsed, type: eventType } as SseEvent;
+
+              if (event.type === "session_update") {
+                queryClient.setQueryData(["session", props.sessionId], event.session);
+                queryClient.invalidateQueries({ queryKey: ["sessions"] });
+                return;
+              }
+
+              dispatchSseEvent(event, dispatch);
             } catch {
               // Ignore malformed events
             }

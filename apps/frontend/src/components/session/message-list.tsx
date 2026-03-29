@@ -25,26 +25,27 @@ export const MessageList: FC<MessageListProps> = (props) => {
           );
         })}
 
-        {/* Pending user message (optimistic, before API refetch) */}
-        {props.pendingUserMessage && (
-          <UserMessage
-            message={{
-              id: "pending",
-              sessionId: "",
-              role: "user",
-              content: props.pendingUserMessage,
-              toolCalls: null,
-              toolCallId: null,
-              toolName: null,
-              ordinal: 0,
-              modelId: null,
-              responseId: null,
-              tokenUsage: null,
-              isCompacted: false,
-              createdAt: new Date().toISOString(),
-            }}
-          />
-        )}
+        {/* Pending user message (optimistic, before cache data arrives) */}
+        {props.pendingUserMessage &&
+          !props.turns.some((t) => t.type === "user" && t.message.id.startsWith("optimistic-")) && (
+            <UserMessage
+              message={{
+                id: "pending",
+                sessionId: "",
+                role: "user",
+                content: props.pendingUserMessage,
+                toolCalls: null,
+                toolCallId: null,
+                toolName: null,
+                ordinal: 0,
+                modelId: null,
+                responseId: null,
+                tokenUsage: null,
+                isCompacted: false,
+                createdAt: new Date().toISOString(),
+              }}
+            />
+          )}
 
         {/* Live streaming content */}
         {props.isStreaming && props.streamingBlocks.length > 0 && (

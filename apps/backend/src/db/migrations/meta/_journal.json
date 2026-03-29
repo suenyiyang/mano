@@ -8,6 +8,13 @@
       "when": 1774759593741,
       "tag": "0000_goofy_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774779001695,
+      "tag": "0001_sparkling_nuke",
+      "breakpoints": true
     }
   ]
 }

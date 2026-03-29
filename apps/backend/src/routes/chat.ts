@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app.js";
@@ -11,10 +12,11 @@ import {
 } from "../db/queries/active-generations.js";
 import { findAllMessagesBySession, getNextOrdinal, insertMessage } from "../db/queries/messages.js";
 import { addTokensToDailyUsage } from "../db/queries/rate-limits.js";
-import { findSessionById } from "../db/queries/sessions.js";
+import { findSessionById, updateSession } from "../db/queries/sessions.js";
 import { findEventsAfter, insertSseEvent } from "../db/queries/sse-events.js";
 import { createAgentForSession, createModelInstance, dbMessagesToLangChain } from "../lib/agent.js";
 import { generateResponseId } from "../lib/id.js";
+import type { ModelConfig } from "../lib/model-config.js";
 import { getModelConfig } from "../lib/model-config.js";
 import { createSseStream, SSE_HEADERS, type SseSender } from "../lib/sse.js";
 import { authMiddleware } from "../middleware/auth.js";
@@ -84,6 +86,41 @@ const createEventSender = (
   };
 };
 
+/**
+ * Generate a session title from the first user message and emit a session_update event.
+ * Runs concurrently with the agent stream — does not block the response.
+ */
+const generateAndEmitTitle = async (
+  db: Db,
+  sessionId: string,
+  userContent: string,
+  modelConfig: ModelConfig,
+  emit: (event: string, data: unknown) => Promise<void>,
+) => {
+  let title: string;
+
+  if (userContent.length <= 10) {
+    title = userContent;
+  } else {
+    const model = createModelInstance(modelConfig);
+    const response = await model.invoke([
+      new SystemMessage(
+        "Generate a concise title (max 20 characters) for a conversation. Return ONLY the title text, no quotes, no explanation.",
+      ),
+      new HumanMessage(userContent),
+    ]);
+    title = (typeof response.content === "string" ? response.content : "").trim().slice(0, 30);
+    if (!title) {
+      title = userContent.slice(0, 20);
+    }
+  }
+
+  const updated = await updateSession(db, sessionId, { title });
+  if (updated) {
+    await emit("session_update", { session: updated });
+  }
+};
+
 export const chatRoutes = new Hono<AppEnv>();
 
 chatRoutes.use("/*", authMiddleware);
@@ -137,6 +174,11 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
 
     try {
       await emit("response_start", { responseId });
+
+      // Generate title for untitled sessions (fire-and-forget)
+      if (!session.title) {
+        generateAndEmitTitle(db, session.id, body.content, modelConfig, emit).catch(() => {});
+      }
 
       // Create ask_user resolver that blocks until user responds via /respond
       const askUserResolver = (_question: string, _options?: string[]): Promise<string> => {

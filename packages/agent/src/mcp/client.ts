@@ -50,7 +50,7 @@ export class McpClientManager {
     const transport = this.createTransport(config);
     await client.connect(transport);
 
-    const { tools: mcpTools } = await client.listTools();
+    const { tools: mcpTools = [] } = await client.listTools();
     const langchainTools = mcpTools.map((mcpTool) => this.convertTool(client, mcpTool));
 
     this.servers.set(config.name, { client, tools: langchainTools });

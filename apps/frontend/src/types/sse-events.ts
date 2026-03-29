@@ -1,4 +1,4 @@
-import type { Message, TokenUsage } from "./api.js";
+import type { Message, Session, TokenUsage } from "./api.js";
 
 export type SseEvent =
   | { type: "response_start"; responseId: string }
@@ -11,5 +11,6 @@ export type SseEvent =
   | { type: "compaction_start"; upToOrdinal: number }
   | { type: "compaction_done"; summary: string }
   | { type: "message_complete"; message: Message }
+  | { type: "session_update"; session: Session }
   | { type: "done"; usage: TokenUsage }
   | { type: "error"; error: string; code: string };
