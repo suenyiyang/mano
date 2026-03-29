@@ -57,7 +57,7 @@ const searchWithTavily = async (
     results: Array<{ title: string; url: string; content: string }>;
   };
 
-  const results: SearchResult[] = data.results.map((r) => ({
+  const results: SearchResult[] = (data.results ?? []).map((r) => ({
     title: r.title,
     url: r.url,
     content: r.content,

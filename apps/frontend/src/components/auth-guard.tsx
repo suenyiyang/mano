@@ -16,6 +16,7 @@ export const AuthGuard: FC = () => {
   }
 
   if (!user) {
+    authToken.clear();
     return <Navigate to="/login" replace />;
   }
 

@@ -363,8 +363,15 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
       if (controller.signal.aborted) {
         await updateGenerationStatus(db, responseId, "cancelled");
       } else {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        await emit("error", { error: message, code: "AGENT_ERROR" });
+        // Unwrap nested MiddlewareError chain to find the true root cause
+        let rootCause: unknown = error;
+        while (rootCause instanceof Error && rootCause.cause instanceof Error) {
+          rootCause = rootCause.cause;
+        }
+        const message = rootCause instanceof Error ? rootCause.message : "Unknown error";
+        const stack = rootCause instanceof Error ? rootCause.stack : undefined;
+        console.error("[AGENT_ERROR] Root cause:", rootCause);
+        await emit("error", { error: message, code: "AGENT_ERROR", stack });
         await updateGenerationStatus(db, responseId, "failed");
       }
     } finally {

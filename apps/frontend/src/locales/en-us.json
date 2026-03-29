@@ -99,5 +99,10 @@
   "mcpServers.namePlaceholder": "Server name",
   "mcpServers.commandPlaceholder": "Command (e.g. npx)",
   "mcpServers.argsPlaceholder": "Args (space-separated)",
-  "mcpServers.urlPlaceholder": "URL"
+  "mcpServers.urlPlaceholder": "URL",
+
+  "notFound.code": "404",
+  "notFound.title": "Page not found",
+  "notFound.description": "The page you're looking for doesn't exist or has been moved.",
+  "notFound.goHome": "Go home"
 }

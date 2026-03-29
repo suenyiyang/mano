@@ -10,6 +10,6 @@ export const createVolcengineModel = (config: VolcengineModelConfig) => {
       baseURL: config.baseUrl ?? DEFAULT_BASE_URL,
       apiKey: config.apiKey,
     },
-    useResponsesApi: true,
+    useResponsesApi: false,
   });
 };

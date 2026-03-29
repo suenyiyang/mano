@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type InfiniteData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router";
 import { apiClient } from "../services/api-client.js";
 import { createSseClient } from "../services/sse-client.js";
-import type { ActiveGeneration, Session } from "../types/api.js";
+import type { ActiveGeneration, PaginatedSessions, Session } from "../types/api.js";
 import type { SseEvent } from "../types/sse-events.js";
 import { useAutoScroll } from "./use-auto-scroll.js";
 import { useChatInputLogic } from "./use-chat-input-logic.js";
@@ -23,6 +23,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   const queryClient = useQueryClient();
   const initialMessageSent = useRef<string | null>(null);
   const resumeAttempted = useRef(false);
+  const sendingRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Session detail
@@ -136,6 +137,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     dispatch({ type: "RESET" });
     setPendingUserMessage(null);
     resumeAttempted.current = false;
+    sendingRef.current = false;
   }, [props.sessionId, dispatch]);
 
   // Handle initial message from new chat navigation
@@ -143,6 +145,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     const state = location.state as { initialMessage?: string } | null;
     if (state?.initialMessage && initialMessageSent.current !== props.sessionId) {
       initialMessageSent.current = props.sessionId;
+      sendingRef.current = true;
       setPendingUserMessage(state.initialMessage);
       chatSend.send(state.initialMessage);
       // Clear the navigation state
@@ -152,7 +155,7 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
 
   // Resume active generation on reconnect (Phase 6.7)
   useEffect(() => {
-    if (resumeAttempted.current || streamingState.isStreaming) return;
+    if (resumeAttempted.current || streamingState.isStreaming || sendingRef.current) return;
     resumeAttempted.current = true;
 
     const resume = async () => {
@@ -177,7 +180,18 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
 
               if (event.type === "session_update") {
                 queryClient.setQueryData(["session", props.sessionId], event.session);
-                queryClient.invalidateQueries({ queryKey: ["sessions"] });
+                queryClient.setQueryData<InfiniteData<PaginatedSessions>>(["sessions"], (old) => {
+                  if (!old) return old;
+                  return {
+                    ...old,
+                    pages: old.pages.map((page) => ({
+                      ...page,
+                      sessions: page.sessions.map((s) =>
+                        s.id === event.session.id ? event.session : s,
+                      ),
+                    })),
+                  };
+                });
                 return;
               }
 

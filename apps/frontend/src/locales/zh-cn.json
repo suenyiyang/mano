@@ -99,5 +99,10 @@
   "mcpServers.namePlaceholder": "服务器名称",
   "mcpServers.commandPlaceholder": "命令（例如 npx）",
   "mcpServers.argsPlaceholder": "参数（空格分隔）",
-  "mcpServers.urlPlaceholder": "URL"
+  "mcpServers.urlPlaceholder": "URL",
+
+  "notFound.code": "404",
+  "notFound.title": "页面未找到",
+  "notFound.description": "你要找的页面不存在或已被移动。",
+  "notFound.goHome": "回到首页"
 }

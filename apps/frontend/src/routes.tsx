@@ -4,6 +4,7 @@ import { GuestGuard } from "./components/guest-guard.js";
 import { AppLayout } from "./components/layout/app-layout.js";
 import { LoginPage } from "./pages/login-page.js";
 import { NewChatPage } from "./pages/new-chat-page.js";
+import { NotFoundPage } from "./pages/not-found-page.js";
 import { OAuthCallbackPage } from "./pages/oauth-callback-page.js";
 import { RegisterPage } from "./pages/register-page.js";
 import { SessionPage } from "./pages/session-page.js";
@@ -53,5 +54,9 @@ export const router = createBrowserRouter([
         ],
       },
     ],
+  },
+  {
+    path: "*",
+    Component: NotFoundPage,
   },
 ]);

@@ -1,7 +1,7 @@
 import { type InfiniteData, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { createSseClient } from "../services/sse-client.js";
-import type { Message, PaginatedMessages } from "../types/api.js";
+import type { Message, PaginatedMessages, PaginatedSessions } from "../types/api.js";
 import type { SseEvent } from "../types/sse-events.js";
 import type { StreamingAction } from "./use-streaming-reducer.js";
 
@@ -71,7 +71,18 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
               // Handle session updates via query cache, not streaming reducer
               if (event.type === "session_update") {
                 queryClient.setQueryData(["session", props.sessionId], event.session);
-                queryClient.invalidateQueries({ queryKey: ["sessions"] });
+                queryClient.setQueryData<InfiniteData<PaginatedSessions>>(["sessions"], (old) => {
+                  if (!old) return old;
+                  return {
+                    ...old,
+                    pages: old.pages.map((page) => ({
+                      ...page,
+                      sessions: page.sessions.map((s) =>
+                        s.id === event.session.id ? event.session : s,
+                      ),
+                    })),
+                  };
+                });
                 return;
               }
 
@@ -87,7 +98,6 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
 
         // Stream ended — refetch messages to get the persisted versions
         queryClient.invalidateQueries({ queryKey: ["messages", props.sessionId] });
-        queryClient.invalidateQueries({ queryKey: ["sessions"] });
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
         props.dispatch({

@@ -29,7 +29,8 @@
     "onlyBuiltDependencies": [
       "bcrypt",
       "esbuild"
-    ]
+    ],
+    "patchedDependencies": {}
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.8",
