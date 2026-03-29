@@ -23,7 +23,6 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
       queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
         ["messages", props.sessionId],
         (old) => {
-          if (!old) return old;
           const optimisticMessage: Message = {
             id: `optimistic-${Date.now()}`,
             sessionId: props.sessionId,
@@ -39,6 +38,12 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
             isCompacted: false,
             createdAt: new Date().toISOString(),
           };
+          if (!old) {
+            return {
+              pages: [{ messages: [optimisticMessage], nextCursor: null }],
+              pageParams: [undefined],
+            };
+          }
           const pages = [...old.pages];
           const lastPageIndex = pages.length - 1;
           const lastPage = pages[lastPageIndex];

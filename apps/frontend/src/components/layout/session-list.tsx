@@ -4,15 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router";
 import { cn } from "../../lib/utils.js";
 import type { Session } from "../../types/api.js";
-import { Button } from "../ui/button.js";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog.js";
+import { DeleteSessionDialog } from "../session/delete-session-dialog.js";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -169,34 +161,14 @@ export const SessionList: FC<SessionListProps> = (props) => {
       ))}
       <div ref={sentinelRef} className="h-1" />
 
-      <Dialog
+      <DeleteSessionDialog
         open={deleteTarget !== null}
+        title={deleteTarget?.title || ""}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("sessionList.deleteTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("sessionList.deleteDescription", {
-                title: deleteTarget?.title || t("common.untitled"),
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              className="bg-red-600 text-white hover:bg-red-700"
-              onClick={handleDeleteConfirm}
-            >
-              {t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 };

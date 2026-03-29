@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { AuthGuard } from "./components/auth-guard.js";
+import { GuestGuard } from "./components/guest-guard.js";
 import { AppLayout } from "./components/layout/app-layout.js";
 import { LoginPage } from "./pages/login-page.js";
 import { NewChatPage } from "./pages/new-chat-page.js";
@@ -14,12 +15,17 @@ export const router = createBrowserRouter([
     element: <Navigate to="/app" replace />,
   },
   {
-    path: "/login",
-    Component: LoginPage,
-  },
-  {
-    path: "/register",
-    Component: RegisterPage,
+    Component: GuestGuard,
+    children: [
+      {
+        path: "/login",
+        Component: LoginPage,
+      },
+      {
+        path: "/register",
+        Component: RegisterPage,
+      },
+    ],
   },
   {
     path: "/auth/callback",

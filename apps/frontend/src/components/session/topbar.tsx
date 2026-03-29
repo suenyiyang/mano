@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.js";
 import { Input } from "../ui/input.js";
+import { DeleteSessionDialog } from "./delete-session-dialog.js";
 
 interface TopbarProps {
   title: string;
@@ -24,6 +25,7 @@ export const Topbar: FC<TopbarProps> = (props) => {
   const { isOpen } = useSidebar();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(props.title);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const handleRenameSubmit = () => {
     const trimmed = renameValue.trim();
@@ -85,13 +87,23 @@ export const Topbar: FC<TopbarProps> = (props) => {
               {t("topbar.fork")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={props.onDelete} className="text-red-500">
+            <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-red-500">
               <Trash2 size={14} />
               {t("common.delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <DeleteSessionDialog
+        open={showDeleteDialog}
+        title={props.title}
+        onOpenChange={setShowDeleteDialog}
+        onConfirm={() => {
+          props.onDelete();
+          setShowDeleteDialog(false);
+        }}
+      />
     </div>
   );
 };
