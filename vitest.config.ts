@@ -6,6 +6,7 @@ export default defineConfig({
       "apps/backend/src/**/*.test.ts",
       "apps/frontend/src/**/*.test.ts",
       "packages/agent/src/**/*.test.ts",
+      "packages/langchain-volcengine/src/**/*.test.ts",
     ],
     globals: true,
   },

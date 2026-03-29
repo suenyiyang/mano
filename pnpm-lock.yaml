@@ -232,6 +232,9 @@ importers:
       '@langchain/openai':
         specifier: ^1.3.1
         version: 1.3.1(@langchain/core@1.1.36(openai@6.33.0(zod@3.25.76)))
+      '@mano/langchain-volcengine':
+        specifier: workspace:*
+        version: link:../langchain-volcengine
       '@modelcontextprotocol/sdk':
         specifier: ^1.28.0
         version: 1.28.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
@@ -244,6 +247,19 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.2(@types/node@22.19.15)(vite@8.0.3(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+
+  packages/langchain-volcengine:
+    dependencies:
+      '@langchain/core':
+        specifier: 'catalog:'
+        version: 1.1.36(openai@6.33.0(zod@4.3.6))
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -3394,6 +3410,26 @@ snapshots:
       - openai
       - ws
 
+  '@langchain/core@1.1.36(openai@6.33.0(zod@4.3.6))':
+    dependencies:
+      '@cfworker/json-schema': 4.1.1
+      '@standard-schema/spec': 1.1.0
+      ansi-styles: 5.2.0
+      camelcase: 6.3.0
+      decamelize: 1.2.0
+      js-tiktoken: 1.0.21
+      langsmith: 0.5.15(openai@6.33.0(zod@4.3.6))
+      mustache: 4.2.0
+      p-queue: 6.6.2
+      uuid: 11.1.0
+      zod: 4.3.6
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+      - '@opentelemetry/exporter-trace-otlp-proto'
+      - '@opentelemetry/sdk-trace-base'
+      - openai
+      - ws
+
   '@langchain/langgraph-checkpoint@1.0.1(@langchain/core@1.1.36(openai@6.33.0(zod@3.25.76)))':
     dependencies:
       '@langchain/core': 1.1.36(openai@6.33.0(zod@3.25.76))
@@ -4613,6 +4649,17 @@ snapshots:
       uuid: 10.0.0
     optionalDependencies:
       openai: 6.33.0(zod@3.25.76)
+
+  langsmith@0.5.15(openai@6.33.0(zod@4.3.6)):
+    dependencies:
+      '@types/uuid': 10.0.0
+      chalk: 5.6.2
+      console-table-printer: 2.15.0
+      p-queue: 6.6.2
+      semver: 7.7.4
+      uuid: 10.0.0
+    optionalDependencies:
+      openai: 6.33.0(zod@4.3.6)
 
   lightningcss-android-arm64@1.32.0:
     optional: true
