@@ -187,6 +187,9 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
         const responseId = data.responseId;
         dispatch({ type: "RESPONSE_START", responseId });
 
+        let receivedDone = false;
+        let receivedAskUser = false;
+
         await createSseClient({
           url: `/api/sessions/${props.sessionId}/chat/${responseId}/resume`,
           method: "GET",
@@ -195,6 +198,9 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
             try {
               const parsed = JSON.parse(eventData);
               const event = { ...parsed, type: eventType } as SseEvent;
+
+              if (event.type === "done") receivedDone = true;
+              if (event.type === "ask_user") receivedAskUser = true;
 
               if (event.type === "session_update") {
                 queryClient.setQueryData(["session", props.sessionId], event.session);
@@ -222,6 +228,17 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
             dispatch({ type: "ERROR", error: error.message });
           },
         });
+
+        // Stream closed without a done event — clean up only if not waiting for user input.
+        // When ask_user is pending the stream closes normally (server has no more events to send
+        // until the user answers), so we must NOT dispatch DONE or the wasStreaming effect
+        // would RESET and close the ask_user dialog.
+        if (!controller.signal.aborted && !receivedDone && !receivedAskUser) {
+          dispatch({
+            type: "DONE",
+            usage: { totalTokens: 0, promptTokens: 0, completionTokens: 0 },
+          });
+        }
       } catch {
         // No active generation or network error — ignore
       }
@@ -245,7 +262,11 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
       onDelete: () => deleteMutation.mutate(),
     },
     messageListProps: {
-      turns: messageList.turns,
+      turns: streamingState.responseId
+        ? messageList.turns.filter(
+            (t) => t.type === "user" || t.responseId !== streamingState.responseId,
+          )
+        : messageList.turns,
       pendingUserMessage,
       streamingBlocks: streamingState.contentBlocks,
       isStreaming: streamingState.isStreaming,
