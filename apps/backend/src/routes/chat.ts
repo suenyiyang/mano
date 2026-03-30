@@ -48,8 +48,13 @@ const chatRespondSchema = z.object({
 const activeControllers = new Map<string, AbortController>();
 const activeEmitters = new Map<string, EventEmitter>();
 
-// Track pending ask_user questions: responseId -> resolver
-const pendingAskUser = new Map<string, { resolve: (answer: string) => void }>();
+// Track pending ask_user questions: responseId -> { resolve, promise }
+// The entry is created early (on_chat_model_end) so it's ready before the SSE event
+// reaches the frontend. The resolver (inside the tool function) returns the same promise.
+const pendingAskUser = new Map<
+  string,
+  { resolve: (answer: string) => void; promise: Promise<string> }
+>();
 
 interface SseEvent {
   id: string;
@@ -180,11 +185,20 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
         generateAndEmitTitle(db, session.id, body.content, modelConfig, emit).catch(() => {});
       }
 
-      // Create ask_user resolver that blocks until user responds via /respond
+      // Create ask_user resolver that blocks until user responds via /respond.
+      // If on_chat_model_end already set up the pending entry, reuse its promise.
+      // Otherwise create a new one (fallback for unexpected ordering).
       const askUserResolver = (_question: string, _options?: string[]): Promise<string> => {
-        return new Promise((resolve) => {
-          pendingAskUser.set(responseId, { resolve });
+        const existing = pendingAskUser.get(responseId);
+        if (existing) {
+          return existing.promise;
+        }
+        let resolveRef!: (answer: string) => void;
+        const promise = new Promise<string>((resolve) => {
+          resolveRef = resolve;
         });
+        pendingAskUser.set(responseId, { resolve: resolveRef, promise });
+        return promise;
       };
 
       // Create agent with all tools
@@ -263,13 +277,33 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
           const output = event.data?.output;
           const toolCalls = output?.tool_calls;
 
-          // Emit tool_call_end for each tool call
+          // Emit tool_call lifecycle events for each tool call
           if (Array.isArray(toolCalls)) {
             for (const tc of toolCalls) {
+              // Synthesize start+delta for models that don't stream tool_call_chunks
+              if (!toolCallNames.has(tc.id)) {
+                toolCallNames.set(tc.id, tc.name);
+                await emit("tool_call_start", { toolCallId: tc.id, name: tc.name });
+                if (tc.args) {
+                  await emit("tool_call_delta", {
+                    toolCallId: tc.id,
+                    argumentsDelta: JSON.stringify(tc.args),
+                  });
+                }
+              }
               await emit("tool_call_end", { toolCallId: tc.id });
 
-              // Emit ask_user SSE event when agent calls ask_user
+              // Emit ask_user SSE event when agent calls ask_user.
+              // Set up pendingAskUser BEFORE emitting the SSE so the entry is
+              // ready by the time the frontend receives the event and responds.
               if (tc.name === "ask_user") {
+                if (!pendingAskUser.has(responseId)) {
+                  let resolveRef!: (answer: string) => void;
+                  const promise = new Promise<string>((resolve) => {
+                    resolveRef = resolve;
+                  });
+                  pendingAskUser.set(responseId, { resolve: resolveRef, promise });
+                }
                 await emit("ask_user", {
                   toolCallId: tc.id,
                   question: tc.args?.question,
@@ -451,7 +485,9 @@ chatRoutes.post("/:id/chat/respond", async (c) => {
   if (body.type === "ask_user_answer") {
     const pending = pendingAskUser.get(body.responseId);
     if (!pending) {
-      throw badRequest("No pending question for this response");
+      // Generation already ended — the pending entry was cleaned up in the finally block.
+      // This is a harmless race condition, not an error.
+      return c.json({ success: true });
     }
 
     // Build the answer from payload
@@ -470,7 +506,7 @@ chatRoutes.post("/:id/chat/respond", async (c) => {
     // that the agent can interpret
     const pending = pendingAskUser.get(body.responseId);
     if (!pending) {
-      throw badRequest("No pending approval for this response");
+      return c.json({ success: true });
     }
 
     if (body.payload.approved) {

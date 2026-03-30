@@ -37,7 +37,7 @@ export const Topbar: FC<TopbarProps> = (props) => {
 
   return (
     <div className={cn("flex h-12 shrink-0 items-center justify-between px-5", !isOpen && "pl-12")}>
-      <div className="text-sm font-medium text-[var(--fg)]">
+      <div className="text-base font-medium text-[var(--fg)]">
         {isRenaming ? (
           <Input
             value={renameValue}

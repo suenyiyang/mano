@@ -18,7 +18,9 @@ export const SessionPage: FC = () => {
       <Topbar {...pageLogic.topbarProps} />
       <MessageList {...pageLogic.messageListProps} />
       {pageLogic.streamingError && (
-        <div className="px-6 py-2 text-center text-sm text-red-500">{pageLogic.streamingError}</div>
+        <div className="px-6 py-2 text-center text-base text-red-500">
+          {pageLogic.streamingError}
+        </div>
       )}
       <div className="flex justify-center px-6 py-3.5">
         <ChatInput {...pageLogic.chatInputProps} />

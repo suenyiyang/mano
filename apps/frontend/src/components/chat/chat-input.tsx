@@ -24,13 +24,14 @@ export const ChatInput: FC<ChatInputProps> = (props) => {
     <div className="w-full px-6" style={{ maxWidth: props.maxWidth ?? "620px" }}>
       <div
         className={cn(
-          "flex flex-col gap-2.5 rounded-[var(--radius-lg)] border border-transparent bg-[var(--bg-hover)] p-3 px-3.5 transition-all",
+          "flex cursor-text flex-col gap-2.5 rounded-[var(--radius-lg)] border border-transparent bg-[var(--bg-hover)] p-3 px-3.5 transition-all",
           "focus-within:border-[var(--border)] focus-within:bg-[var(--bg)]",
         )}
+        onClick={() => props.textareaRef.current?.focus()}
       >
         <textarea
           ref={props.textareaRef}
-          className="w-full resize-none border-none bg-transparent text-sm leading-[1.5] text-[var(--fg)] outline-none placeholder:text-[var(--fg-faint)]"
+          className="w-full resize-none border-none bg-transparent text-base leading-[1.5] text-[var(--fg)] outline-none placeholder:text-[var(--fg-faint)]"
           style={{ minHeight: "22px", fontFamily: "var(--font-sans)" }}
           rows={1}
           placeholder={props.placeholder ?? t("chatInput.placeholder")}

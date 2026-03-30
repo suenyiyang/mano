@@ -207,7 +207,7 @@ describe("chat/respond", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 400 when no pending question for ask_user_answer", async () => {
+  it("returns 200 gracefully when no pending question for ask_user_answer", async () => {
     const app = await createTestApp();
     const res = await app.request(
       `/api/sessions/${TEST_SESSION_ID}/chat/respond`,
@@ -219,13 +219,13 @@ describe("chat/respond", () => {
       }),
     );
 
-    // No pending ask_user for this responseId
-    expect(res.status).toBe(400);
+    // No pending ask_user — generation already ended, graceful no-op
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toContain("No pending question");
+    expect(body.success).toBe(true);
   });
 
-  it("returns 400 when no pending approval for hitl_approval", async () => {
+  it("returns 200 gracefully when no pending approval for hitl_approval", async () => {
     const app = await createTestApp();
     const res = await app.request(
       `/api/sessions/${TEST_SESSION_ID}/chat/respond`,
@@ -237,9 +237,10 @@ describe("chat/respond", () => {
       }),
     );
 
-    expect(res.status).toBe(400);
+    // No pending approval — generation already ended, graceful no-op
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toContain("No pending approval");
+    expect(body.success).toBe(true);
   });
 
   it("returns 400 for generation that is not running", async () => {

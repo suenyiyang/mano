@@ -1,5 +1,10 @@
 import { type RefObject, useCallback, useRef, useState } from "react";
 
+interface UseChatInputLogicProps {
+  onSend: (content: string) => void;
+  isStreaming?: boolean;
+}
+
 interface UseChatInputLogicResult {
   value: string;
   onChange: (value: string) => void;
@@ -8,7 +13,7 @@ interface UseChatInputLogicResult {
   handleKeyDown: (e: React.KeyboardEvent) => void;
 }
 
-export const useChatInputLogic = (onSend: (content: string) => void): UseChatInputLogicResult => {
+export const useChatInputLogic = (props: UseChatInputLogicProps): UseChatInputLogicResult => {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -29,8 +34,8 @@ export const useChatInputLogic = (onSend: (content: string) => void): UseChatInp
 
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
-    if (!trimmed) return;
-    onSend(trimmed);
+    if (!trimmed || props.isStreaming) return;
+    props.onSend(trimmed);
     setValue("");
     requestAnimationFrame(() => {
       const textarea = textareaRef.current;
@@ -38,16 +43,18 @@ export const useChatInputLogic = (onSend: (content: string) => void): UseChatInp
         textarea.style.height = "auto";
       }
     });
-  }, [value, onSend]);
+  }, [value, props.onSend, props.isStreaming]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
-        handleSend();
+        if (!props.isStreaming) {
+          handleSend();
+        }
       }
     },
-    [handleSend],
+    [handleSend, props.isStreaming],
   );
 
   return {

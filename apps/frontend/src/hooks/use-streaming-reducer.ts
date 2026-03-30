@@ -129,6 +129,7 @@ export const streamingReducer = (
       return {
         ...state,
         isStreaming: false,
+        askUser: null,
         usage: action.usage,
       };
 
@@ -136,6 +137,7 @@ export const streamingReducer = (
       return {
         ...state,
         isStreaming: false,
+        askUser: null,
         error: action.error,
       };
 

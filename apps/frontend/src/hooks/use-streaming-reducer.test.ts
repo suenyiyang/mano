@@ -160,6 +160,16 @@ describe("streamingReducer", () => {
       expect(state.usage).toEqual({ promptTokens: 10, completionTokens: 5, totalTokens: 15 });
       expect(state.contentBlocks).toHaveLength(1);
     });
+
+    it("clears askUser state on DONE", () => {
+      const state = reduce([
+        { type: "RESPONSE_START", responseId: "r1" },
+        { type: "ASK_USER", toolCallId: "tc1", question: "Which file?" },
+        { type: "DONE", usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
+      ]);
+      expect(state.askUser).toBeNull();
+      expect(state.isStreaming).toBe(false);
+    });
   });
 
   describe("ERROR", () => {
@@ -170,6 +180,16 @@ describe("streamingReducer", () => {
       ]);
       expect(state.isStreaming).toBe(false);
       expect(state.error).toBe("rate limited");
+    });
+
+    it("clears askUser state on ERROR", () => {
+      const state = reduce([
+        { type: "RESPONSE_START", responseId: "r1" },
+        { type: "ASK_USER", toolCallId: "tc1", question: "Which file?" },
+        { type: "ERROR", error: "something broke" },
+      ]);
+      expect(state.askUser).toBeNull();
+      expect(state.isStreaming).toBe(false);
     });
   });
 

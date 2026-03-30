@@ -13,71 +13,76 @@ interface UseChatSendLogicProps {
 export const useChatSendLogic = (props: UseChatSendLogicProps) => {
   const queryClient = useQueryClient();
   const abortRef = useRef<AbortController | null>(null);
+  const responseIdRef = useRef<string | null>(null);
 
   const send = useCallback(
     async (content: string, externalSignal?: AbortSignal) => {
+      // Prevent double-sends while a send is in progress.
+      // Allow retry when the previous send was aborted (e.g. StrictMode cleanup).
+      if (abortRef.current && !abortRef.current.signal.aborted) return;
+
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Link external signal (e.g. from useEffect cleanup) to internal controller
-      if (externalSignal) {
-        if (externalSignal.aborted) {
-          controller.abort();
-          return;
-        }
-        externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
-      }
-
-      // Cancel in-flight queries so they don't overwrite the optimistic data
-      await queryClient.cancelQueries({ queryKey: ["messages", props.sessionId] });
-
-      // If the signal was aborted during the await (e.g. StrictMode cleanup), bail out
-      if (controller.signal.aborted) return;
-
-      // Optimistically add the user message to the cache.
-      // Remove any existing optimistic messages first to prevent duplicates
-      // (e.g. React 19 StrictMode double-firing effects).
-      queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
-        ["messages", props.sessionId],
-        (old) => {
-          const optimisticMessage: Message = {
-            id: `optimistic-${Date.now()}`,
-            sessionId: props.sessionId,
-            role: "user",
-            content,
-            toolCalls: null,
-            toolCallId: null,
-            toolName: null,
-            ordinal: Number.MAX_SAFE_INTEGER,
-            modelId: null,
-            responseId: null,
-            tokenUsage: null,
-            isCompacted: false,
-            createdAt: new Date().toISOString(),
-          };
-          if (!old) {
-            return {
-              pages: [{ messages: [optimisticMessage], nextCursor: null }],
-              pageParams: [undefined],
-            };
-          }
-          const pages = old.pages.map((page) => ({
-            ...page,
-            messages: page.messages.filter((m) => !m.id.startsWith("optimistic-")),
-          }));
-          const lastPageIndex = pages.length - 1;
-          const lastPage = pages[lastPageIndex];
-          if (lastPage) {
-            pages[lastPageIndex] = {
-              ...lastPage,
-              messages: [...lastPage.messages, optimisticMessage],
-            };
-          }
-          return { ...old, pages };
-        },
-      );
-
       try {
+        // Link external signal (e.g. from useEffect cleanup) to internal controller
+        if (externalSignal) {
+          if (externalSignal.aborted) {
+            controller.abort();
+            return;
+          }
+          externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+        }
+
+        // Cancel in-flight queries so they don't overwrite the optimistic data
+        await queryClient.cancelQueries({ queryKey: ["messages", props.sessionId] });
+
+        // If the signal was aborted during the await (e.g. StrictMode cleanup), bail out
+        if (controller.signal.aborted) return;
+
+        // Optimistically add the user message to the cache.
+        // Remove any existing optimistic messages first to prevent duplicates
+        // (e.g. React 19 StrictMode double-firing effects).
+        queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+          ["messages", props.sessionId],
+          (old) => {
+            const optimisticMessage: Message = {
+              id: `optimistic-${Date.now()}`,
+              sessionId: props.sessionId,
+              role: "user",
+              content,
+              toolCalls: null,
+              toolCallId: null,
+              toolName: null,
+              ordinal: Number.MAX_SAFE_INTEGER,
+              modelId: null,
+              responseId: null,
+              tokenUsage: null,
+              isCompacted: false,
+              createdAt: new Date().toISOString(),
+            };
+            if (!old) {
+              return {
+                pages: [{ messages: [optimisticMessage], nextCursor: null }],
+                pageParams: [undefined],
+              };
+            }
+            const pages = old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.filter((m) => !m.id.startsWith("optimistic-")),
+            }));
+            const lastPageIndex = pages.length - 1;
+            const lastPage = pages[lastPageIndex];
+            if (lastPage) {
+              pages[lastPageIndex] = {
+                ...lastPage,
+                messages: [...lastPage.messages, optimisticMessage],
+              };
+            }
+            return { ...old, pages };
+          },
+        );
+
         await createSseClient({
           url: `/api/sessions/${props.sessionId}/chat/send`,
           method: "POST",
@@ -87,6 +92,11 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
             try {
               const parsed = JSON.parse(data);
               const event = { ...parsed, type: eventType } as SseEvent;
+
+              // Capture responseId for terminate
+              if (event.type === "response_start") {
+                responseIdRef.current = event.responseId;
+              }
 
               // Handle session updates via query cache, not streaming reducer
               if (event.type === "session_update") {
@@ -124,6 +134,9 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
           type: "ERROR",
           error: error instanceof Error ? error.message : "Unknown error",
         });
+      } finally {
+        abortRef.current = null;
+        responseIdRef.current = null;
       }
     },
     [props.sessionId, props.dispatch, queryClient],
@@ -131,10 +144,12 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
 
   const terminate = useCallback(async () => {
     abortRef.current?.abort();
+    const responseId = responseIdRef.current;
+    if (!responseId) return;
     try {
       const { apiClient } = await import("../services/api-client.js");
       await apiClient.post(`/sessions/${props.sessionId}/chat/terminate`, {
-        responseId: "", // Will be set properly when we have the responseId
+        responseId,
       });
     } catch {
       // Best-effort terminate

@@ -10,7 +10,7 @@ export const UserMessage: FC<UserMessageProps> = (props) => {
 
   return (
     <div className="mb-6 flex justify-end">
-      <div className="max-w-[85%] rounded-[18px_18px_4px_18px] bg-[var(--bg-bubble)] px-4 py-2.5 text-sm leading-[1.55] text-[var(--fg)]">
+      <div className="max-w-[85%] rounded-[18px_18px_4px_18px] bg-[var(--bg-bubble)] px-4 py-2.5 text-base leading-[1.55] text-[var(--fg)]">
         {content}
       </div>
     </div>

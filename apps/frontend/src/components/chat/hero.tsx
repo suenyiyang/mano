@@ -9,7 +9,7 @@ export const Hero: FC = () => {
       <h1 className="text-[22px] font-[650] tracking-[-0.03em] text-[var(--fg)]">
         {t("hero.title")}
       </h1>
-      <p className="text-sm text-[var(--fg-muted)]">{t("hero.subtitle")}</p>
+      <p className="text-base text-[var(--fg-muted)]">{t("hero.subtitle")}</p>
     </div>
   );
 };
