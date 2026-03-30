@@ -39,7 +39,7 @@ export const useNewChatPageLogic = () => {
     [createSession, navigate, queryClient],
   );
 
-  const chatInputProps = useChatInputLogic(handleSend);
+  const chatInputProps = useChatInputLogic({ onSend: handleSend });
 
   const handleQuickAction = useCallback(
     (text: string) => {

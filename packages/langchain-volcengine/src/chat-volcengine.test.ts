@@ -934,6 +934,90 @@ describe("ChatVolcengine", () => {
         input_token_details: { cache_read: 80 },
       });
     });
+
+    it("streams tool calls with metadata from output_item.added event", async () => {
+      const events = [
+        {
+          event: "response.created",
+          data: { type: "response.created", id: "resp-tc01" },
+        },
+        {
+          event: "response.output_text.delta",
+          data: { type: "response.output_text.delta", delta: "Let me ask." },
+        },
+        {
+          event: "response.output_item.added",
+          data: {
+            type: "response.output_item.added",
+            output_index: 1,
+            item: {
+              type: "function_call",
+              call_id: "call_abc",
+              name: "ask_user",
+              arguments: "",
+              status: "in_progress",
+            },
+          },
+        },
+        {
+          event: "response.function_call_arguments.delta",
+          data: {
+            type: "response.function_call_arguments.delta",
+            output_index: 1,
+            delta: '{"question":',
+          },
+        },
+        {
+          event: "response.function_call_arguments.delta",
+          data: {
+            type: "response.function_call_arguments.delta",
+            output_index: 1,
+            delta: '"What topic?"}',
+          },
+        },
+        {
+          event: "response.function_call_arguments.done",
+          data: {
+            type: "response.function_call_arguments.done",
+            output_index: 1,
+            arguments: '{"question":"What topic?"}',
+          },
+        },
+        {
+          event: "response.completed",
+          data: {
+            type: "response.completed",
+            id: "resp-tc01",
+            usage: { input_tokens: 50, output_tokens: 20, total_tokens: 70 },
+          },
+        },
+      ];
+
+      fetchSpy.mockResolvedValue(createResponsesSSE(events));
+
+      const model = createModel({ useResponsesApi: true });
+      const allChunks: AIMessageChunk[] = [];
+
+      for await (const chunk of model._streamResponseChunks([new HumanMessage("Make a PPT")], {})) {
+        allChunks.push(chunk.message as AIMessageChunk);
+      }
+
+      // Accumulate all chunks (same as _generateFromStream)
+      const accumulated = allChunks.reduce((acc, c) => acc.concat(c));
+
+      // The final message should have tool_calls with correct metadata
+      expect(accumulated.tool_calls).toBeDefined();
+      expect(accumulated.tool_calls).toHaveLength(1);
+      expect(accumulated.tool_calls![0]).toMatchObject({
+        id: "call_abc",
+        name: "ask_user",
+        args: { question: "What topic?" },
+      });
+      // Text content should also be present
+      expect(typeof accumulated.content === "string" ? accumulated.content : "").toContain(
+        "Let me ask.",
+      );
+    });
   });
 
   describe("getLsParams", () => {

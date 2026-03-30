@@ -273,9 +273,13 @@ export class ChatVolcengine extends BaseChatModel<ChatVolcengineCallOptions> {
     }
 
     // Responses API streaming uses event types like:
-    // response.output_text.delta, response.function_call_arguments.delta,
+    // response.output_item.added, response.output_text.delta,
+    // response.function_call_arguments.delta/done,
     // response.reasoning_summary_text.delta, response.completed, etc.
     let responseId: string | undefined;
+    // Track function call metadata by output_index — the name and call_id
+    // arrive in response.output_item.added, before the argument deltas.
+    const functionCallMeta = new Map<number, { callId: string; name: string }>();
 
     for await (const { event, data } of parseRawSSEEvents(response)) {
       if (data === "[DONE]") break;
@@ -327,6 +331,19 @@ export class ChatVolcengine extends BaseChatModel<ChatVolcengineCallOptions> {
         continue;
       }
 
+      // Capture function call metadata (call_id, name) when the output item is added.
+      if (eventType === "response.output_item.added") {
+        const item = parsed.item as { type?: string; call_id?: string; name?: string } | undefined;
+        if (item?.type === "function_call" && item.name) {
+          const idx = (parsed.output_index as number) ?? 0;
+          functionCallMeta.set(idx, {
+            callId: item.call_id ?? `tool_call_${idx}`,
+            name: item.name,
+          });
+        }
+        continue;
+      }
+
       if (eventType === "response.output_text.delta") {
         const delta = (parsed.delta as string) ?? "";
         const chunk = new AIMessageChunk({
@@ -353,13 +370,15 @@ export class ChatVolcengine extends BaseChatModel<ChatVolcengineCallOptions> {
 
       if (eventType === "response.function_call_arguments.delta") {
         const argsDelta = (parsed.delta as string) ?? "";
+        const idx = (parsed.output_index as number) ?? 0;
+        const meta = functionCallMeta.get(idx);
         const chunk = new AIMessageChunk({
           content: "",
           tool_call_chunks: [
             {
-              index: (parsed.output_index as number) ?? 0,
-              id: parsed.call_id as string | undefined,
-              name: parsed.name as string | undefined,
+              index: idx,
+              id: (parsed.call_id as string | undefined) ?? meta?.callId,
+              name: (parsed.name as string | undefined) ?? meta?.name,
               args: argsDelta,
               type: "tool_call_chunk",
             },
@@ -370,8 +389,28 @@ export class ChatVolcengine extends BaseChatModel<ChatVolcengineCallOptions> {
         continue;
       }
 
-      // For function_call_arguments.done, emit the final tool call info
+      // For function_call_arguments.done, emit a final chunk with the complete
+      // tool call metadata. Merges call_id/name from the event, the stored
+      // output_item.added metadata, and synthetic fallbacks.
       if (eventType === "response.function_call_arguments.done") {
+        const idx = (parsed.output_index as number) ?? 0;
+        const meta = functionCallMeta.get(idx);
+        const callId = (parsed.call_id as string | undefined) ?? meta?.callId ?? `tool_call_${idx}`;
+        const name = (parsed.name as string | undefined) ?? meta?.name ?? "";
+        const chunk = new AIMessageChunk({
+          content: "",
+          tool_call_chunks: [
+            {
+              index: idx,
+              id: callId,
+              name,
+              args: "",
+              type: "tool_call_chunk",
+            },
+          ],
+          id: responseId,
+        });
+        yield new ChatGenerationChunk({ message: chunk, text: "" });
       }
     }
   }

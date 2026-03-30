@@ -68,7 +68,10 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     [chatSend],
   );
 
-  const chatInputProps = useChatInputLogic(handleSend);
+  const chatInputProps = useChatInputLogic({
+    onSend: handleSend,
+    isStreaming: streamingState.isStreaming,
+  });
 
   // ─── Topbar actions ───────────────────────────────────────────────────
 
