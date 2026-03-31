@@ -102,11 +102,9 @@ export const createAgentForSession = async (options: CreateAgentOptions) => {
   if (env.TAVILY_API_KEY) {
     searchProviders.tavily = { apiKey: env.TAVILY_API_KEY };
   }
-  if (env.VOLCENGINE_API_KEY && env.VOLCENGINE_SEARCH_BOT_ID) {
+  if (env.VOLCENGINE_SEARCH_API_KEY) {
     searchProviders.volcengine = {
-      apiKey: env.VOLCENGINE_API_KEY,
-      botId: env.VOLCENGINE_SEARCH_BOT_ID,
-      baseUrl: env.VOLCENGINE_BASE_URL,
+      apiKey: env.VOLCENGINE_SEARCH_API_KEY,
     };
   }
   middleware.push(createWebSearchMiddleware({ providers: searchProviders }));

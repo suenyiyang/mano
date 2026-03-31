@@ -14,7 +14,7 @@ const envSchema = z.object({
 
   // Web search providers (optional, enable as needed)
   TAVILY_API_KEY: z.string().optional(),
-  VOLCENGINE_SEARCH_BOT_ID: z.string().optional(),
+  VOLCENGINE_SEARCH_API_KEY: z.string().optional(),
 
   // OAuth (optional)
   GITHUB_CLIENT_ID: z.string().optional(),

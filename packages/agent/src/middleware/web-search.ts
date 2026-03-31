@@ -8,7 +8,6 @@ export interface WebSearchProviderConfig {
   };
   volcengine?: {
     apiKey: string;
-    botId: string;
     baseUrl?: string;
   };
 }
@@ -70,23 +69,44 @@ const searchWithTavily = async (
   return results;
 };
 
+interface VolcengineWebSearchResponse {
+  ResponseMetadata: {
+    RequestId: string;
+    Error?: { CodeN: number; Code: string; Message: string };
+  };
+  Result?: {
+    ResultCount: number;
+    WebResults?: Array<{
+      Title: string;
+      SiteName?: string;
+      Url?: string;
+      Snippet: string;
+      Summary?: string;
+      Content?: string;
+    }>;
+  };
+}
+
+const VOLCENGINE_SEARCH_BASE_URL = "https://open.feedcoopapi.com/search_api";
+
 const searchWithVolcengine = async (
   apiKey: string,
-  botId: string,
   baseUrl: string,
   query: string,
   maxResults: number,
 ): Promise<SearchResult[]> => {
-  const response = await fetch(`${baseUrl}/bots/chat/completions`, {
+  const response = await fetch(`${baseUrl}/web_search`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: botId,
-      messages: [{ role: "user", content: query }],
-      stream: false,
+      Query: query.slice(0, 100),
+      SearchType: "web",
+      Count: Math.min(maxResults, 50),
+      NeedSummary: true,
+      Filter: { NeedUrl: true },
     }),
   });
 
@@ -94,35 +114,19 @@ const searchWithVolcengine = async (
     throw new Error(`Volcengine search failed: ${response.status} ${response.statusText}`);
   }
 
-  const data = (await response.json()) as {
-    choices: Array<{ message: { content: string } }>;
-    references?: Array<{
-      title: string;
-      url: string;
-      summary: string;
-      site_name?: string;
-    }>;
-  };
+  const data = (await response.json()) as VolcengineWebSearchResponse;
 
-  const results: SearchResult[] = [];
-
-  // Add the LLM-generated answer
-  const answer = data.choices?.[0]?.message?.content;
-  if (answer) {
-    results.push({ title: "AI Answer", url: "", content: answer });
+  if (data.ResponseMetadata.Error) {
+    const err = data.ResponseMetadata.Error;
+    throw new Error(`Volcengine search error ${err.Code}: ${err.Message}`);
   }
 
-  // Add referenced sources
-  const refs = data.references ?? [];
-  for (const ref of refs.slice(0, maxResults)) {
-    results.push({
-      title: ref.title || ref.site_name || "Untitled",
-      url: ref.url,
-      content: ref.summary,
-    });
-  }
-
-  return results;
+  const webResults = data.Result?.WebResults ?? [];
+  return webResults.map((r) => ({
+    title: r.Title || r.SiteName || "Untitled",
+    url: r.Url ?? "",
+    content: r.Summary || r.Content || r.Snippet || "",
+  }));
 };
 
 const formatResults = (results: SearchResult[]): string => {
@@ -159,12 +163,11 @@ export const createWebSearchMiddleware = (options: WebSearchMiddlewareOptions) =
 
       try {
         if (primary === "volcengine" && providers.volcengine) {
-          const { apiKey, botId, baseUrl } = providers.volcengine;
+          const { apiKey, baseUrl } = providers.volcengine;
           return formatResults(
             await searchWithVolcengine(
               apiKey,
-              botId,
-              baseUrl ?? "https://ark.cn-beijing.volces.com/api/v3",
+              baseUrl ?? VOLCENGINE_SEARCH_BASE_URL,
               query,
               maxResults,
             ),
@@ -183,12 +186,11 @@ export const createWebSearchMiddleware = (options: WebSearchMiddlewareOptions) =
           return formatResults(await searchWithTavily(providers.tavily.apiKey, query, maxResults));
         }
         if (primary === "tavily" && providers.volcengine) {
-          const { apiKey, botId, baseUrl } = providers.volcengine;
+          const { apiKey, baseUrl } = providers.volcengine;
           return formatResults(
             await searchWithVolcengine(
               apiKey,
-              botId,
-              baseUrl ?? "https://ark.cn-beijing.volces.com/api/v3",
+              baseUrl ?? VOLCENGINE_SEARCH_BASE_URL,
               query,
               maxResults,
             ),

@@ -51,7 +51,7 @@ describe("createWebSearchMiddleware", () => {
     const middleware = createWebSearchMiddleware({
       providers: {
         tavily: { apiKey: "tvly-test" },
-        volcengine: { apiKey: "ark-test", botId: "bot-123" },
+        volcengine: { apiKey: "search-api-key" },
       },
     });
 
@@ -67,8 +67,19 @@ describe("createWebSearchMiddleware", () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: "北京今天晴天" } }],
-        references: [{ title: "天气预报", url: "https://weather.com.cn", summary: "北京天气" }],
+        ResponseMetadata: { RequestId: "test-123" },
+        Result: {
+          ResultCount: 1,
+          WebResults: [
+            {
+              Title: "天气预报",
+              SiteName: "weather.com.cn",
+              Url: "https://weather.com.cn",
+              Snippet: "北京天气简要",
+              Summary: "北京今天晴天，最高温度25度",
+            },
+          ],
+        },
       }),
     });
 
@@ -76,15 +87,15 @@ describe("createWebSearchMiddleware", () => {
     const middleware = createWebSearchMiddleware({
       providers: {
         tavily: { apiKey: "tvly-test" },
-        volcengine: { apiKey: "ark-test", botId: "bot-123" },
+        volcengine: { apiKey: "search-api-key" },
       },
     });
 
     const result = await middleware.tools[0].invoke({ query: "北京今天天气怎么样" });
-    expect(result).toContain("北京今天晴天");
     expect(result).toContain("天气预报");
+    expect(result).toContain("北京今天晴天");
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining("bots/chat/completions"),
+      expect.stringContaining("web_search"),
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -105,7 +116,41 @@ describe("createWebSearchMiddleware", () => {
     const middleware = createWebSearchMiddleware({
       providers: {
         tavily: { apiKey: "tvly-test" },
-        volcengine: { apiKey: "ark-test", botId: "bot-123" },
+        volcengine: { apiKey: "search-api-key" },
+      },
+    });
+
+    const result = await middleware.tools[0].invoke({ query: "北京今天天气怎么样" });
+    expect(result).toContain("Fallback");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back when Volcengine returns API-level error", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ResponseMetadata: {
+            RequestId: "test-err",
+            Error: { CodeN: 10400, Code: "10400", Message: "query or search type is empty" },
+          },
+          Result: null,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [
+            { title: "Fallback", url: "https://fallback.com", content: "Fallback content" },
+          ],
+        }),
+      });
+
+    const { createWebSearchMiddleware } = await import("./web-search.js");
+    const middleware = createWebSearchMiddleware({
+      providers: {
+        tavily: { apiKey: "tvly-test" },
+        volcengine: { apiKey: "search-api-key" },
       },
     });
 
