@@ -250,12 +250,36 @@ export interface VolcengineResponsesFunctionTool {
 }
 
 // ---------------------------------------------------------------------------
+// Responses API - Input item types (different from Chat Completions messages)
+// ---------------------------------------------------------------------------
+
+export interface VolcengineResponsesInputFunctionCall {
+  type: "function_call";
+  call_id: string;
+  name: string;
+  arguments: string;
+}
+
+export interface VolcengineResponsesInputFunctionCallOutput {
+  type: "function_call_output";
+  call_id: string;
+  output: string;
+}
+
+export type VolcengineResponsesInputItem =
+  | VolcengineSystemMessage
+  | VolcengineUserMessage
+  | Omit<VolcengineAssistantMessage, "tool_calls" | "reasoning_content">
+  | VolcengineResponsesInputFunctionCall
+  | VolcengineResponsesInputFunctionCallOutput;
+
+// ---------------------------------------------------------------------------
 // Responses API - Request body
 // ---------------------------------------------------------------------------
 
 export interface VolcengineResponsesRequest {
   model: string;
-  input: VolcengineMessage[] | string;
+  input: VolcengineResponsesInputItem[] | string;
   previous_response_id?: string;
   store?: boolean;
   caching?: VolcengineCachingParam;
