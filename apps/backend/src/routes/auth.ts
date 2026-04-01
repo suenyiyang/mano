@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import type { AppEnv } from "../app.js";
+import { deleteAuthSession } from "../db/queries/auth-sessions.js";
 import {
   createOauthAccount,
   createUser,
@@ -9,26 +9,10 @@ import {
   findUserById,
   findUserByOauth,
 } from "../db/queries/users.js";
-import { getEnv } from "../env.js";
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jwt.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
+import { clearSessionCookie, createSessionAndSetCookie, getSessionCookie } from "../lib/session.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { badRequest, unauthorized } from "../middleware/error-handler.js";
-
-const REFRESH_TOKEN_COOKIE = "refresh_token";
-const REFRESH_TOKEN_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
-
-const setRefreshTokenCookie = (c: Parameters<typeof setCookie>[0], refreshToken: string) => {
-  const env = getEnv();
-  const isProduction = env.FRONTEND_URL.startsWith("https");
-  setCookie(c, REFRESH_TOKEN_COOKIE, refreshToken, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: "Lax",
-    path: "/api/auth",
-    maxAge: REFRESH_TOKEN_MAX_AGE,
-  });
-};
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -59,15 +43,11 @@ authRoutes.post("/register", async (c) => {
     displayName: body.displayName,
   });
 
-  const tokenPayload = { userId: user.id, email: user.email, tier: user.tier };
-  const token = await signAccessToken(tokenPayload);
-  const refreshToken = await signRefreshToken(tokenPayload);
-  setRefreshTokenCookie(c, refreshToken);
+  await createSessionAndSetCookie(c, db, user.id, user.tier);
 
   return c.json(
     {
       user: { id: user.id, email: user.email, displayName: user.displayName, tier: user.tier },
-      token,
     },
     201,
   );
@@ -87,40 +67,21 @@ authRoutes.post("/login", async (c) => {
     throw unauthorized("Invalid email or password");
   }
 
-  const tokenPayload = { userId: user.id, email: user.email, tier: user.tier };
-  const token = await signAccessToken(tokenPayload);
-  const refreshToken = await signRefreshToken(tokenPayload);
-  setRefreshTokenCookie(c, refreshToken);
+  await createSessionAndSetCookie(c, db, user.id, user.tier);
 
   return c.json({
     user: { id: user.id, email: user.email, displayName: user.displayName, tier: user.tier },
-    token,
   });
 });
 
-authRoutes.post("/refresh", async (c) => {
-  const cookieToken = getCookie(c, REFRESH_TOKEN_COOKIE);
-  if (!cookieToken) {
-    throw unauthorized("Missing refresh token");
-  }
-
-  try {
-    const payload = await verifyRefreshToken(cookieToken);
+authRoutes.post("/logout", async (c) => {
+  const sessionId = getSessionCookie(c);
+  if (sessionId) {
     const db = c.var.db;
-    const user = await findUserById(db, payload.userId);
-    if (!user) {
-      throw unauthorized("User not found");
-    }
-
-    const tokenPayload = { userId: user.id, email: user.email, tier: user.tier };
-    const token = await signAccessToken(tokenPayload);
-    const refreshToken = await signRefreshToken(tokenPayload);
-    setRefreshTokenCookie(c, refreshToken);
-
-    return c.json({ token });
-  } catch {
-    throw unauthorized("Invalid or expired refresh token");
+    await deleteAuthSession(db, sessionId);
   }
+  clearSessionCookie(c);
+  return c.json({ success: true });
 });
 
 authRoutes.get("/me", authMiddleware, async (c) => {
@@ -225,13 +186,10 @@ authRoutes.get("/github/callback", async (c) => {
     });
   }
 
-  const tokenPayload = { userId: user.id, email: user.email, tier: user.tier };
-  const token = await signAccessToken(tokenPayload);
-  const refreshToken = await signRefreshToken(tokenPayload);
-  setRefreshTokenCookie(c, refreshToken);
+  await createSessionAndSetCookie(c, db, user.id, user.tier);
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-  return c.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+  return c.redirect(`${frontendUrl}/auth/callback`);
 });
 
 // Google OAuth callback
@@ -296,11 +254,8 @@ authRoutes.get("/google/callback", async (c) => {
     });
   }
 
-  const tokenPayload = { userId: user.id, email: user.email, tier: user.tier };
-  const token = await signAccessToken(tokenPayload);
-  const refreshToken = await signRefreshToken(tokenPayload);
-  setRefreshTokenCookie(c, refreshToken);
+  await createSessionAndSetCookie(c, db, user.id, user.tier);
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-  return c.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+  return c.redirect(`${frontendUrl}/auth/callback`);
 });

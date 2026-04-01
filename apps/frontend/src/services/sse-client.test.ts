@@ -159,9 +159,7 @@ describe("createSseClient", () => {
     ).rejects.toThrow("SSE request failed: 429");
   });
 
-  it("sends POST with body and auth header", async () => {
-    store.mano_token = "test-token";
-
+  it("sends POST with body and credentials", async () => {
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(sseStream("data: ok\n\n")));
@@ -178,8 +176,8 @@ describe("createSseClient", () => {
       expect.objectContaining({
         method: "POST",
         body: '{"content":"hello"}',
+        credentials: "include",
         headers: expect.objectContaining({
-          Authorization: "Bearer test-token",
           "Content-Type": "application/json",
         }),
       }),

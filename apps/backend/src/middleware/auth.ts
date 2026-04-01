@@ -1,20 +1,40 @@
 import type { MiddlewareHandler } from "hono";
-import { verifyAccessToken } from "../lib/jwt.js";
+import {
+  deleteAuthSession,
+  extendAuthSession,
+  findAuthSession,
+} from "../db/queries/auth-sessions.js";
+import { getSessionCookie } from "../lib/session.js";
 import { unauthorized } from "./error-handler.js";
 
+const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
-  const header = c.req.header("authorization");
-  if (!header?.startsWith("Bearer ")) {
-    throw unauthorized("Missing or invalid authorization header");
+  const sessionId = getSessionCookie(c);
+  if (!sessionId) {
+    throw unauthorized("Missing session");
   }
 
-  const token = header.slice(7);
-  try {
-    const payload = await verifyAccessToken(token);
-    c.set("userId", payload.userId);
-    c.set("userTier", payload.tier);
-  } catch {
-    throw unauthorized("Invalid or expired token");
+  const db = c.var.db;
+  const session = await findAuthSession(db, sessionId);
+  if (!session) {
+    throw unauthorized("Invalid session");
+  }
+
+  if (session.expiresAt < new Date()) {
+    await deleteAuthSession(db, sessionId);
+    throw unauthorized("Session expired");
+  }
+
+  c.set("userId", session.userId);
+  c.set("userTier", session.userTier);
+
+  // Sliding window: extend if less than 15 days remaining
+  const remainingMs = session.expiresAt.getTime() - Date.now();
+  if (remainingMs < FIFTEEN_DAYS_MS) {
+    const newExpiresAt = new Date(Date.now() + THIRTY_DAYS_MS);
+    await extendAuthSession(db, sessionId, newExpiresAt);
   }
 
   await next();

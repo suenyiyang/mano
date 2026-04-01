@@ -86,11 +86,10 @@ export const mockSessionDetail = async (page: Page, sessionId: string, title: st
   );
 };
 
-/** Set auth tokens in localStorage before page loads */
+/** Set session hint in localStorage before page loads */
 export const setAuthTokens = async (page: Page) => {
   await page.addInitScript(() => {
-    localStorage.setItem("mano_token", "fake-token");
-    localStorage.setItem("mano_refresh_token", "fake-refresh");
+    localStorage.setItem("mano_has_session", "1");
   });
 };
 

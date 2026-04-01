@@ -15,11 +15,10 @@
     "@hono/node-server": "catalog:",
     "@langchain/core": "catalog:",
     "@mano/agent": "workspace:*",
-    "langchain": "catalog:",
     "bcrypt": "^6.0.0",
     "drizzle-orm": "^0.45.2",
     "hono": "catalog:",
-    "jose": "^6.2.2",
+    "langchain": "catalog:",
     "postgres": "^3.4.8",
     "zod": "catalog:"
   },

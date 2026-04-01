@@ -1,5 +1,3 @@
-import { authToken } from "./auth-token.js";
-
 interface SseClientOptions {
   url: string;
   method?: "GET" | "POST";
@@ -16,11 +14,6 @@ export const createSseClient = async (options: SseClientOptions) => {
     Accept: "text/event-stream",
   };
 
-  const token = authToken.get();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   if (options.body) {
     headers["Content-Type"] = "application/json";
   }
@@ -34,6 +27,7 @@ export const createSseClient = async (options: SseClientOptions) => {
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
+    credentials: "include",
   });
 
   if (!response.ok) {

@@ -46,6 +46,22 @@ export const oauthAccounts = pgTable(
   ],
 );
 
+// ─── Auth Sessions ─────────────────────────────────────────────────────────
+
+export const authSessions = pgTable(
+  "auth_sessions",
+  {
+    id: text().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userTier: text("user_tier").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_auth_sessions_user").on(t.userId)],
+);
+
 // ─── Sessions ───────────────────────────────────────────────────────────────
 
 export const sessions = pgTable(

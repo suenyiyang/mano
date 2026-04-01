@@ -72,8 +72,6 @@ export interface PaginatedMessages {
 
 export interface AuthResponse {
   user: User;
-  token: string;
-  refreshToken: string;
 }
 
 // ─── Active Generation ─────────────────────────────────────────────────────

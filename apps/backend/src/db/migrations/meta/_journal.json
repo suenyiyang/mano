@@ -15,6 +15,13 @@
       "when": 1774779001695,
       "tag": "0001_sparkling_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775053688472,
+      "tag": "0002_overrated_shockwave",
+      "breakpoints": true
     }
   ]
 }

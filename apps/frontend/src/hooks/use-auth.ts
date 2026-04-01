@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useNavigate } from "react-router";
 import { apiClient } from "../services/api-client.js";
-import { authToken } from "../services/auth-token.js";
+import { authSession } from "../services/auth-token.js";
 import type { AuthResponse } from "../types/api.js";
 import { useCurrentUser } from "./use-current-user.js";
 
@@ -28,7 +28,7 @@ export const useAuthLogic = () => {
       return data;
     },
     onSuccess: (data) => {
-      authToken.set(data.token, data.refreshToken);
+      authSession.markLoggedIn();
       queryClient.setQueryData(["currentUser"], data.user);
       navigate("/app");
     },
@@ -40,14 +40,19 @@ export const useAuthLogic = () => {
       return data;
     },
     onSuccess: (data) => {
-      authToken.set(data.token, data.refreshToken);
+      authSession.markLoggedIn();
       queryClient.setQueryData(["currentUser"], data.user);
       navigate("/app");
     },
   });
 
-  const logout = useCallback(() => {
-    authToken.clear();
+  const logout = useCallback(async () => {
+    try {
+      await apiClient.post("/auth/logout");
+    } catch {
+      // Ignore — server session may already be gone
+    }
+    authSession.markLoggedOut();
     queryClient.clear();
     navigate("/login");
   }, [queryClient, navigate]);

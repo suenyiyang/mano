@@ -41,8 +41,6 @@ test.describe("Login page", () => {
             avatarUrl: null,
             tier: "pro",
           },
-          token: "fake-jwt",
-          refreshToken: "fake-refresh",
         }),
       }),
     );
@@ -82,9 +80,9 @@ test.describe("Login page", () => {
     // Should redirect to /app
     await page.waitForURL("**/app");
 
-    // Verify tokens were stored
-    const token = await page.evaluate(() => localStorage.getItem("mano_token"));
-    expect(token).toBe("fake-jwt");
+    // Verify session hint was stored
+    const hasSession = await page.evaluate(() => localStorage.getItem("mano_has_session"));
+    expect(hasSession).toBe("1");
   });
 
   test("shows error on login failure", async ({ page }) => {

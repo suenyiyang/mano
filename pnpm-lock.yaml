@@ -98,9 +98,6 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.12.9
-      jose:
-        specifier: ^6.2.2
-        version: 6.2.2
       langchain:
         specifier: 'catalog:'
         version: 1.2.37(@langchain/core@1.1.36(openai@6.33.0(zod@3.25.76)))(openai@6.33.0(zod@3.25.76))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod-to-json-schema@3.25.2(zod@3.25.76))

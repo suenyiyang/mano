@@ -1,24 +1,16 @@
 import { type FC, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useSearchParams } from "react-router";
-import { authToken } from "../services/auth-token.js";
+import { useNavigate } from "react-router";
+import { authSession } from "../services/auth-token.js";
 
 export const OAuthCallbackPage: FC = () => {
   const { t } = useTranslation();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    const refreshToken = searchParams.get("refreshToken");
-
-    if (token && refreshToken) {
-      authToken.set(token, refreshToken);
-      navigate("/app", { replace: true });
-    } else {
-      navigate("/login", { replace: true });
-    }
-  }, [searchParams, navigate]);
+    authSession.markLoggedIn();
+    navigate("/app", { replace: true });
+  }, [navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
