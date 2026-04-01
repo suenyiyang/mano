@@ -9,5 +9,8 @@ export default defineConfig({
       "packages/langchain-volcengine/src/**/*.test.ts",
     ],
     globals: true,
+    env: {
+      DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+    },
   },
 });

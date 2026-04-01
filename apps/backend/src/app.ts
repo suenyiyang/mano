@@ -26,9 +26,12 @@ const app = new Hono<AppEnv>();
 app.use("/api/*", requestId);
 app.use("/api/*", errorHandler);
 
-// DB middleware — must be before routes
-const db = createDb(getEnv().DATABASE_URL);
+// DB middleware — must be before routes (lazy init to avoid env validation at import time)
+let db: Db | undefined;
 app.use("/api/*", async (c, next) => {
+  if (!db) {
+    db = createDb(getEnv().DATABASE_URL);
+  }
   c.set("db", db);
   await next();
 });

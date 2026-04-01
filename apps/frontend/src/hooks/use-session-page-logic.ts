@@ -43,12 +43,22 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
   const chatSend = useChatSendLogic({ sessionId: props.sessionId, dispatch });
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const wasStreaming = useRef(false);
+  const prevSessionIdRef = useRef(props.sessionId);
 
   // Auto-scroll
   const autoScroll = useAutoScroll(scrollRef, [messageList.turns, streamingState.contentBlocks]);
 
-  // When streaming transitions true → false: refetch messages, then clear streaming blocks
+  // When streaming transitions true → false: refetch messages, then clear streaming blocks.
+  // Skip when the transition is caused by a session switch (the RESET effect handles that).
   useEffect(() => {
+    const sessionChanged = prevSessionIdRef.current !== props.sessionId;
+    prevSessionIdRef.current = props.sessionId;
+
+    if (sessionChanged) {
+      wasStreaming.current = false;
+      return;
+    }
+
     if (wasStreaming.current && !streamingState.isStreaming) {
       setPendingUserMessage(null);
       // Refetch persisted messages, then clear streaming blocks so turns take over
@@ -232,16 +242,10 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
           },
         });
 
-        // Stream closed without a done event — clean up only if not waiting for user input.
-        // When ask_user is pending the stream closes normally (server has no more events to send
-        // until the user answers), so we must NOT dispatch DONE or the wasStreaming effect
-        // would RESET and close the ask_user dialog.
-        if (!controller.signal.aborted && !receivedDone && !receivedAskUser) {
-          dispatch({
-            type: "DONE",
-            usage: { totalTokens: 0, promptTokens: 0, completionTokens: 0 },
-          });
-        }
+        // Stream closed — if done was received the reducer already transitioned.
+        // If the stream dropped without done (network error, server restart),
+        // keep streaming state as-is (consistent with the send flow) so the
+        // user can see the indicator and refresh if needed.
       } catch {
         // No active generation or network error — ignore
       }
