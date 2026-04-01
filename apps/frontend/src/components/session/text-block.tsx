@@ -9,7 +9,10 @@ interface TextBlockProps {
 export const TextBlock: FC<TextBlockProps> = (props) => {
   return (
     <div className="text-base leading-[1.65] text-[var(--fg)]">
-      <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      <Markdown
+        remarkPlugins={[[remarkGfm, { singleTilde: false }]]}
+        components={markdownComponents}
+      >
         {props.content}
       </Markdown>
     </div>
