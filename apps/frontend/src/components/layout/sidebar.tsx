@@ -1,16 +1,13 @@
-import { PanelLeftClose, Plus, Search, Settings, User } from "lucide-react";
+import { PanelLeftClose, Plus, Search } from "lucide-react";
 import type { FC } from "react";
 import { useTranslation } from "react-i18next";
-import { useAuth } from "../../contexts/auth-context.js";
 import { useSidebar } from "../../contexts/sidebar-context.js";
 import { useSessionListLogic } from "../../hooks/use-session-list-logic.js";
 import { cn } from "../../lib/utils.js";
-import { LanguageSwitcher } from "./language-switcher.js";
 import { SessionList } from "./session-list.js";
 
 export const Sidebar: FC = () => {
   const { t } = useTranslation();
-  const { user } = useAuth();
   const { isOpen, isMobile, close } = useSidebar();
   const sessionList = useSessionListLogic();
 
@@ -71,23 +68,6 @@ export const Sidebar: FC = () => {
           sessionList.deleteSessionMutation.mutate(sessionId);
         }}
       />
-
-      {/* Footer */}
-      <div className="p-1.5">
-        <button
-          type="button"
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-[7px] text-[13px] text-[var(--fg-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
-          onClick={sessionList.handleOpenSettings}
-        >
-          <Settings size={15} strokeWidth={1.75} />
-          <span>{t("common.settings")}</span>
-        </button>
-        <LanguageSwitcher />
-        <div className="flex items-center gap-2 rounded-md px-2.5 py-[7px] text-[13px] text-[var(--fg-muted)]">
-          <User size={15} strokeWidth={1.75} />
-          <span>{user?.displayName ?? t("sidebar.user")}</span>
-        </div>
-      </div>
     </>
   );
 

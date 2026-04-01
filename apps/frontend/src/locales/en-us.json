@@ -54,6 +54,7 @@
   "sidebar.open": "Open sidebar",
   "sidebar.close": "Close sidebar",
   "sidebar.user": "User",
+  "sidebar.logout": "Log out",
 
   "sessionList.empty": "No conversations yet",
   "sessionList.rename": "Rename",

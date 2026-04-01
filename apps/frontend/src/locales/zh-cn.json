@@ -54,6 +54,7 @@
   "sidebar.open": "打开侧边栏",
   "sidebar.close": "收起侧边栏",
   "sidebar.user": "用户",
+  "sidebar.logout": "退出登录",
 
   "sessionList.empty": "还没有对话",
   "sessionList.rename": "重命名",

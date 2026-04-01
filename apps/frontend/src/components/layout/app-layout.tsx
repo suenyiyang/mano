@@ -6,6 +6,7 @@ import { AuthProvider } from "../../contexts/auth-context.js";
 import { SidebarProvider, useSidebar } from "../../contexts/sidebar-context.js";
 import { ThemeProvider } from "../../contexts/theme-context.js";
 import { Sidebar } from "./sidebar.js";
+import { UserAvatarMenu } from "./user-avatar-menu.js";
 
 const AppLayoutInner: FC = () => {
   const { t } = useTranslation();
@@ -25,6 +26,9 @@ const AppLayoutInner: FC = () => {
             <PanelLeft size={16} strokeWidth={1.75} />
           </button>
         )}
+        <div className="absolute top-2.5 right-5 z-10">
+          <UserAvatarMenu />
+        </div>
         <Outlet />
       </main>
     </div>

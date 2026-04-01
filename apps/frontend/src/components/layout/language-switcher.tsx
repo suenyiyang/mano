@@ -16,7 +16,7 @@ export const LanguageSwitcher: FC = () => {
   return (
     <button
       type="button"
-      className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-[7px] text-[13px] text-[var(--fg-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
+      className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-[7px] text-[13px] text-[var(--fg-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
       onClick={() => i18n.changeLanguage(next.code)}
     >
       <Languages size={15} strokeWidth={1.75} />

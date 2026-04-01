@@ -1,6 +1,7 @@
 import { type FC, type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { LanguageSwitcher } from "../components/layout/language-switcher.js";
 import { Button } from "../components/ui/button.js";
 import { Input } from "../components/ui/input.js";
 import { useAuthLogic } from "../hooks/use-auth.js";
@@ -17,7 +18,10 @@ export const LoginPage: FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
+    <div className="relative flex min-h-screen items-center justify-center bg-[var(--bg)]">
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
       <div className="w-full max-w-sm space-y-6 px-6">
         <div className="text-center">
           <h1 className="text-[22px] font-[650] tracking-[-0.03em] text-[var(--fg)]">
