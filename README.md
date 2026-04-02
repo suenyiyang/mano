@@ -2,6 +2,10 @@
 
 A full-stack AI chat application with multi-turn conversations, configurable agents, and extensible tool support.
 
+![Home](docs/screenshots/home.png)
+
+![Chat](docs/screenshots/chat.png)
+
 ## Tech Stack
 
 | Layer | Technology |

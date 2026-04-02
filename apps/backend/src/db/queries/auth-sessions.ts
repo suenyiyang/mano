@@ -46,3 +46,7 @@ export const extendAuthSession = async (db: Db, sessionId: string, newExpiresAt:
 export const deleteExpiredAuthSessions = async (db: Db) => {
   await db.delete(authSessions).where(lt(authSessions.expiresAt, new Date()));
 };
+
+export const updateAuthSessionsTier = async (db: Db, userId: string, newTier: string) => {
+  await db.update(authSessions).set({ userTier: newTier }).where(eq(authSessions.userId, userId));
+};

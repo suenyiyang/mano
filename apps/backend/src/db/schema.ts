@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   displayName: text("display_name").notNull(),
   avatarUrl: text("avatar_url"),
   tier: text().notNull().default("free"),
+  stripeCustomerId: text("stripe_customer_id").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -288,4 +289,86 @@ export const rateLimitMinuteLog = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("idx_rate_limit_minute").on(t.userId, t.createdAt)],
+);
+
+// ─── Subscriptions ─────────────────────────────────────────────────────────
+
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    stripeCustomerId: text("stripe_customer_id").notNull(),
+    stripeSubscriptionId: text("stripe_subscription_id").unique(),
+    stripePriceId: text("stripe_price_id"),
+    tier: text().notNull().default("free"),
+    status: text().notNull().default("active"),
+    currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_subscriptions_stripe_customer").on(t.stripeCustomerId),
+    index("idx_subscriptions_stripe_sub").on(t.stripeSubscriptionId),
+  ],
+);
+
+// ─── Credit Balances ───────────────────────────────────────────────────────
+
+export const creditBalances = pgTable("credit_balances", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  balance: integer().notNull().default(0),
+  monthlyAllowance: integer("monthly_allowance").notNull().default(0),
+  periodStart: timestamp("period_start", { withTimezone: true }),
+  periodEnd: timestamp("period_end", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─── Credit Transactions ───────────────────────────────────────────────────
+
+export const creditTransactions = pgTable(
+  "credit_transactions",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    amount: integer().notNull(),
+    type: text().notNull(),
+    description: text(),
+    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
+    modelId: text("model_id"),
+    balanceAfter: integer("balance_after").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_credit_transactions_user").on(t.userId, t.createdAt)],
+);
+
+// ─── Payment History ───────────────────────────────────────────────────────
+
+export const paymentHistory = pgTable(
+  "payment_history",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    stripeInvoiceId: text("stripe_invoice_id").unique(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text().notNull().default("usd"),
+    status: text().notNull(),
+    tier: text().notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_payment_history_user").on(t.userId, t.createdAt)],
 );

@@ -20,6 +20,7 @@
     "hono": "catalog:",
     "langchain": "catalog:",
     "postgres": "^3.4.8",
+    "stripe": "^21.0.1",
     "zod": "catalog:"
   },
   "devDependencies": {

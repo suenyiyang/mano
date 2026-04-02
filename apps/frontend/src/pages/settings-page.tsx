@@ -1,17 +1,19 @@
 import { ArrowLeft } from "lucide-react";
-import { type FC, useState } from "react";
+import { type FC, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useSidebar } from "../contexts/sidebar-context.js";
 import { cn } from "../lib/utils.js";
 import { McpServersPage } from "./settings/mcp-servers-page.js";
 import { SkillsPage } from "./settings/skills-page.js";
+import { SubscriptionPage } from "./settings/subscription-page.js";
 
-type Tab = "skills" | "mcp-servers";
+type Tab = "subscription" | "skills" | "mcp-servers";
 
-const TAB_IDS: Tab[] = ["skills", "mcp-servers"];
+const TAB_IDS: Tab[] = ["subscription", "skills", "mcp-servers"];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
+  subscription: "settings.tabSubscription",
   skills: "settings.tabSkills",
   "mcp-servers": "settings.tabMcpServers",
 };
@@ -20,7 +22,25 @@ export const SettingsPage: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { isOpen } = useSidebar();
-  const [activeTab, setActiveTab] = useState<Tab>("skills");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const tabParam = searchParams.get("tab") as Tab | null;
+  const [activeTab, setActiveTab] = useState<Tab>(
+    tabParam && TAB_IDS.includes(tabParam) ? tabParam : "subscription",
+  );
+
+  // Sync tab from URL query param
+  useEffect(() => {
+    const tab = searchParams.get("tab") as Tab | null;
+    if (tab && TAB_IDS.includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   return (
     <div className="flex flex-1 flex-col">
@@ -52,13 +72,14 @@ export const SettingsPage: FC = () => {
                     ? "border-b-2 border-[var(--fg)] font-medium text-[var(--fg)]"
                     : "text-[var(--fg-muted)] hover:text-[var(--fg)]",
                 )}
-                onClick={() => setActiveTab(id)}
+                onClick={() => handleTabChange(id)}
               >
                 {t(TAB_LABEL_KEYS[id])}
               </button>
             ))}
           </div>
 
+          {activeTab === "subscription" && <SubscriptionPage />}
           {activeTab === "skills" && <SkillsPage />}
           {activeTab === "mcp-servers" && <McpServersPage />}
         </div>

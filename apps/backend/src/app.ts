@@ -11,6 +11,8 @@ import { mcpServerRoutes } from "./routes/mcp-servers.js";
 import { messageRoutes } from "./routes/messages.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { skillRoutes } from "./routes/skills.js";
+import { subscriptionRoutes } from "./routes/subscriptions.js";
+import { webhookRoutes } from "./routes/webhooks.js";
 
 export type AppEnv = {
   Variables: {
@@ -45,6 +47,8 @@ app.route("/api/sessions", chatRoutes);
 app.route("/api/attachments", attachmentRoutes);
 app.route("/api/skills", skillRoutes);
 app.route("/api/mcp-servers", mcpServerRoutes);
+app.route("/api/subscriptions", subscriptionRoutes);
+app.route("/api/webhooks", webhookRoutes);
 
 app.get("/", (c) => c.json({ message: "Mano API" }));
 

@@ -52,6 +52,37 @@ export const createOauthAccount = async (
   return rows[0]!;
 };
 
+export const updateUserTier = async (db: Db, userId: string, tier: string) => {
+  const rows = await db
+    .update(users)
+    .set({ tier, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning();
+  return rows[0] ?? null;
+};
+
+export const updateUserStripeCustomerId = async (
+  db: Db,
+  userId: string,
+  stripeCustomerId: string,
+) => {
+  const rows = await db
+    .update(users)
+    .set({ stripeCustomerId, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning();
+  return rows[0] ?? null;
+};
+
+export const findUserByStripeCustomerId = async (db: Db, stripeCustomerId: string) => {
+  const rows = await db
+    .select()
+    .from(users)
+    .where(eq(users.stripeCustomerId, stripeCustomerId))
+    .limit(1);
+  return rows[0] ?? null;
+};
+
 export const findUserByOauth = async (db: Db, provider: string, providerUserId: string) => {
   const rows = await db
     .select({ user: users, oauth: oauthAccounts })

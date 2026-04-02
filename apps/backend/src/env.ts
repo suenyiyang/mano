@@ -22,6 +22,12 @@ const envSchema = z.object({
 
   // Frontend URL for OAuth redirects
   FRONTEND_URL: z.string().default("http://localhost:5173"),
+
+  // Stripe (optional, needed for subscriptions)
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRO_PRICE_ID: z.string().optional(),
+  STRIPE_MAX_PRICE_ID: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

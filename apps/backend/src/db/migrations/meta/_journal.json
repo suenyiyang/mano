@@ -29,6 +29,20 @@
       "when": 1775135212501,
       "tag": "0003_blushing_moonstone",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775138354138,
+      "tag": "0004_lying_hammerhead",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775138400000,
+      "tag": "0005_seed_tiers_and_credits",
+      "breakpoints": true
     }
   ]
 }

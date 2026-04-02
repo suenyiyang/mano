@@ -77,6 +77,23 @@ vi.mock("../lib/model-config.js", () => ({
   })),
 }));
 
+vi.mock("../db/queries/model-tiers.js", () => ({
+  selectModelForTier: vi.fn(async () => ({
+    tier: "pro",
+    provider: "openai",
+    apiModelId: "gpt-4o",
+    displayName: "GPT-4o",
+    weight: 1,
+    isEnabled: true,
+    config: { creditsPerMillionInputTokens: 3, creditsPerMillionOutputTokens: 10 },
+  })),
+}));
+
+vi.mock("../db/queries/credits.js", () => ({
+  calculateCreditCost: vi.fn(() => 0),
+  deductCredits: vi.fn(async () => 0),
+}));
+
 vi.mock("../db/queries/sse-events.js", () => ({
   insertSseEvent: vi.fn(async () => ({ id: 1 })),
   findEventsAfter: vi.fn(async () => []),

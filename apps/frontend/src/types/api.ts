@@ -167,3 +167,41 @@ export interface UpdateMcpServerPayload {
   env?: Record<string, string>;
   isEnabled?: boolean;
 }
+
+// ─── Subscriptions ───────────────────────────────────────────────────────
+
+export interface SubscriptionPlan {
+  tier: string;
+  name: string;
+  priceMonthly: number;
+  creditAllowance: number;
+  models: { provider: string; apiModelId: string; displayName: string }[];
+}
+
+export interface SubscriptionStatus {
+  status: string;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+}
+
+export interface CreditBalance {
+  balance: number;
+  monthlyAllowance: number;
+  periodEnd: string | null;
+}
+
+export interface CreditTransaction {
+  id: string;
+  amount: number;
+  type: string;
+  description: string | null;
+  modelId: string | null;
+  createdAt: string;
+}
+
+export interface SubscriptionCurrentResponse {
+  tier: string;
+  subscription: SubscriptionStatus | null;
+  credits: CreditBalance;
+  recentTransactions: CreditTransaction[];
+}

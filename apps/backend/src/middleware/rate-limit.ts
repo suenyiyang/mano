@@ -1,16 +1,15 @@
 import type { MiddlewareHandler } from "hono";
+import { ensureCreditBalance } from "../db/queries/credits.js";
 import {
   findTierRateLimits,
-  getDailyUsage,
   getMinuteRequestCount,
-  incrementDailyUsage,
   logMinuteRequest,
 } from "../db/queries/rate-limits.js";
 import { HttpError } from "./error-handler.js";
 
 /**
  * Rate limit middleware for chat endpoints.
- * Checks per-minute and per-day request limits based on user's tier.
+ * Checks per-minute request limit and credit balance.
  * Should be applied AFTER authMiddleware (needs userId and userTier).
  */
 export const rateLimitMiddleware: MiddlewareHandler = async (c, next) => {
@@ -19,32 +18,26 @@ export const rateLimitMiddleware: MiddlewareHandler = async (c, next) => {
   const userTier = c.get("userTier") as string;
 
   const limits = await findTierRateLimits(db, userTier);
-  if (!limits) {
-    // No rate limits configured for this tier — allow through
-    await next();
-    return;
-  }
 
   // Check per-minute limit
-  const minuteCount = await getMinuteRequestCount(db, userId);
-  if (minuteCount >= limits.requestsPerMinute) {
-    throw new HttpError(429, "Rate limit exceeded: too many requests per minute");
-  }
-
-  // Check per-day limits
-  const dailyUsage = await getDailyUsage(db, userId);
-  if (dailyUsage) {
-    if (dailyUsage.requestsUsed >= limits.requestsPerDay) {
-      throw new HttpError(429, "Rate limit exceeded: daily request limit reached");
-    }
-    if (dailyUsage.tokensUsed >= limits.tokensPerDay) {
-      throw new HttpError(429, "Rate limit exceeded: daily token limit reached");
+  if (limits) {
+    const minuteCount = await getMinuteRequestCount(db, userId);
+    if (minuteCount >= limits.requestsPerMinute) {
+      throw new HttpError(429, "Rate limit exceeded: too many requests per minute");
     }
   }
 
-  // Log this request
+  // Check credit balance
+  const creditBalance = await ensureCreditBalance(db, userId, userTier);
+  if (creditBalance && creditBalance.balance <= 0) {
+    throw new HttpError(
+      429,
+      "You have run out of credits for this billing period. Upgrade your plan or wait for your credits to reset.",
+    );
+  }
+
+  // Log this request for minute tracking
   await logMinuteRequest(db, userId);
-  await incrementDailyUsage(db, userId);
 
   await next();
 };
