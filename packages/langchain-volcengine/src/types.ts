@@ -250,28 +250,13 @@ export interface VolcengineResponsesFunctionTool {
 }
 
 // ---------------------------------------------------------------------------
-// Responses API - Input item types (different from Chat Completions messages)
+// Responses API - Input item types
+// Volcengine Responses API uses the same role-based message format as Chat
+// Completions (every item has a `content` field), unlike OpenAI's Responses API
+// which uses separate function_call / function_call_output item types.
 // ---------------------------------------------------------------------------
 
-export interface VolcengineResponsesInputFunctionCall {
-  type: "function_call";
-  call_id: string;
-  name: string;
-  arguments: string;
-}
-
-export interface VolcengineResponsesInputFunctionCallOutput {
-  type: "function_call_output";
-  call_id: string;
-  output: string;
-}
-
-export type VolcengineResponsesInputItem =
-  | VolcengineSystemMessage
-  | VolcengineUserMessage
-  | Omit<VolcengineAssistantMessage, "tool_calls" | "reasoning_content">
-  | VolcengineResponsesInputFunctionCall
-  | VolcengineResponsesInputFunctionCallOutput;
+export type VolcengineResponsesInputItem = VolcengineMessage;
 
 // ---------------------------------------------------------------------------
 // Responses API - Request body

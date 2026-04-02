@@ -8,8 +8,11 @@ interface MessageListProps {
   pendingUserMessage: string | null;
   streamingBlocks: ContentBlock[];
   isStreaming: boolean;
+  onRetry?: () => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
+  feedbackMap: Record<string, string>;
+  onFeedback: (responseId: string, feedback: "like" | "dislike" | null) => void;
 }
 
 export const MessageList: FC<MessageListProps> = (props) => {
@@ -21,7 +24,13 @@ export const MessageList: FC<MessageListProps> = (props) => {
             return <UserMessage key={turn.message.id} message={turn.message} />;
           }
           return (
-            <AgentMessage key={turn.responseId} timestamp={turn.timestamp} blocks={turn.blocks} />
+            <AgentMessage
+              key={turn.responseId}
+              timestamp={turn.timestamp}
+              blocks={turn.blocks}
+              feedback={(props.feedbackMap[turn.responseId] as "like" | "dislike") ?? null}
+              onFeedback={(fb) => props.onFeedback(turn.responseId, fb)}
+            />
           );
         })}
 
@@ -53,6 +62,7 @@ export const MessageList: FC<MessageListProps> = (props) => {
             timestamp={new Date().toISOString()}
             blocks={props.streamingBlocks}
             isStreaming={props.isStreaming}
+            onRetry={props.onRetry}
           />
         )}
       </div>

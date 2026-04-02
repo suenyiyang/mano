@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "../index.js";
 import { messages } from "../schema.js";
 
@@ -69,6 +69,12 @@ export const insertMessage = async (
 ) => {
   const rows = await db.insert(messages).values(input).returning();
   return rows[0]!;
+};
+
+export const deleteNonUserMessagesByResponseId = async (db: Db, responseId: string) => {
+  await db
+    .delete(messages)
+    .where(and(eq(messages.responseId, responseId), ne(messages.role, "user")));
 };
 
 export const markMessagesCompacted = async (db: Db, sessionId: string, upToOrdinal: number) => {

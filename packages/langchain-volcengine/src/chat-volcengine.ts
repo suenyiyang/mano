@@ -20,7 +20,6 @@ import type {
   VolcengineChatCompletion,
   VolcengineChatCompletionRequest,
   VolcengineReasoningEffort,
-  VolcengineResponsesInputItem,
   VolcengineResponsesObject,
   VolcengineResponsesRequest,
   VolcengineResponsesStreamEvent,
@@ -485,48 +484,14 @@ export class ChatVolcengine extends BaseChatModel<ChatVolcengineCallOptions> {
     options: this["ParsedCallOptions"],
     streaming: boolean,
   ): VolcengineResponsesRequest {
-    // The Responses API uses a different input format than Chat Completions:
-    // - Assistant messages must NOT contain tool_calls or reasoning_content
-    // - Tool calls are separate { type: "function_call" } items
-    // - Tool results are { type: "function_call_output" } items instead of role: "tool"
-    const volcengineMessages = convertMessagesToVolcengineParams(messages);
-    const inputItems: VolcengineResponsesInputItem[] = [];
-
-    for (const m of volcengineMessages) {
-      if (m.role === "assistant") {
-        const { reasoning_content, tool_calls, ...rest } = m as typeof m & {
-          reasoning_content?: string;
-          tool_calls?: Array<{
-            id: string;
-            type: "function";
-            function: { name: string; arguments: string };
-          }>;
-        };
-        inputItems.push(rest);
-        if (tool_calls?.length) {
-          for (const tc of tool_calls) {
-            inputItems.push({
-              type: "function_call",
-              call_id: tc.id,
-              name: tc.function.name,
-              arguments: tc.function.arguments,
-            });
-          }
-        }
-      } else if (m.role === "tool") {
-        inputItems.push({
-          type: "function_call_output",
-          call_id: (m as { tool_call_id: string }).tool_call_id,
-          output: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-        });
-      } else {
-        inputItems.push(m);
-      }
-    }
+    // Volcengine Responses API uses the same role-based message format as Chat
+    // Completions (every item has `content`), unlike OpenAI's Responses API which
+    // uses separate function_call / function_call_output item types.
+    const inputMessages = convertMessagesToVolcengineParams(messages);
 
     const body: VolcengineResponsesRequest = {
       model: this.model,
-      input: inputItems,
+      input: inputMessages,
       stream: streaming,
     };
 

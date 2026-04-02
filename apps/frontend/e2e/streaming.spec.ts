@@ -180,9 +180,18 @@ test.describe("Send message and SSE streaming", () => {
     await expect(page.getByText("Let me write that file.")).toBeVisible();
     await expect(page.getByText("write_file")).toBeVisible();
     await expect(page.getByText("Done! File created.")).toBeVisible();
+
+    // Tool result is hidden until expanded
+    await expect(page.getByText("File written successfully")).not.toBeVisible();
+    // Click tool call to expand
+    await page.getByText("write_file").click();
+    await expect(page.getByText("File written successfully")).toBeVisible();
+    // Click again to collapse
+    await page.getByText("write_file").click();
+    await expect(page.getByText("File written successfully")).not.toBeVisible();
   });
 
-  test("shows stop button while streaming", async ({ page }) => {
+  test("shows stop button while streaming and hides feedback buttons", async ({ page }) => {
     // Stream with no DONE — isStreaming stays true
     await page.route("**/api/sessions/s1/chat/send", (route) =>
       fulfillSseStream(route, responseStart("r1"), textDelta("Working on it...")),
@@ -197,6 +206,10 @@ test.describe("Send message and SSE streaming", () => {
     await expect(page.getByText("Do something")).toBeVisible();
     await expect(page.getByTitle("Stop generating")).toBeVisible();
     await expect(page.getByText("Working on it...")).toBeVisible();
+
+    // Feedback buttons should NOT be visible during streaming
+    await expect(page.getByTitle("Good response")).not.toBeVisible();
+    await expect(page.getByTitle("Bad response")).not.toBeVisible();
   });
 
   test("send button returns after stream completes", async ({ page }) => {
@@ -216,6 +229,84 @@ test.describe("Send message and SSE streaming", () => {
 
     // After stream completes, stop button should not be present
     await expect(page.getByTitle("Stop generating")).not.toBeVisible({ timeout: 3000 });
+  });
+
+  test("shows feedback buttons after stream completes and toggles on click", async ({ page }) => {
+    // Include DONE so streaming completes
+    await page.route("**/api/sessions/s1/chat/send", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sseBody(responseStart("r1"), textDelta("Here is the answer."), done()),
+      }),
+    );
+
+    // Mock persisted messages after refetch
+    await page.route("**/api/sessions/s1/messages/list*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          messages: [
+            {
+              id: "m1",
+              sessionId: "s1",
+              role: "user",
+              content: "Ask something",
+              toolCalls: null,
+              toolCallId: null,
+              toolName: null,
+              ordinal: 1,
+              modelId: null,
+              responseId: null,
+              tokenUsage: null,
+              isCompacted: false,
+              createdAt: "2025-01-01T14:30:00Z",
+            },
+            {
+              id: "m2",
+              sessionId: "s1",
+              role: "assistant",
+              content: "Here is the answer.",
+              toolCalls: null,
+              toolCallId: null,
+              toolName: null,
+              ordinal: 2,
+              modelId: "doubao-seed",
+              responseId: "r1",
+              tokenUsage: null,
+              isCompacted: false,
+              createdAt: "2025-01-01T14:30:05Z",
+            },
+          ],
+          nextCursor: null,
+        }),
+      }),
+    );
+
+    await page.goto("/app/s1");
+    const textarea = page.getByPlaceholder("Send a follow-up...");
+    await textarea.fill("Ask something");
+    await textarea.press("Enter");
+
+    // Wait for stream completion and refetch
+    await expect(page.getByTitle("Stop generating")).not.toBeVisible({ timeout: 3000 });
+
+    // Feedback buttons should appear
+    const likeBtn = page.getByTitle("Good response");
+    const dislikeBtn = page.getByTitle("Bad response");
+    await expect(likeBtn).toBeVisible();
+    await expect(dislikeBtn).toBeVisible();
+
+    // Click like — should toggle on
+    await likeBtn.click();
+    // Click like again — should toggle off
+    await likeBtn.click();
+
+    // Click dislike — should toggle on
+    await dislikeBtn.click();
+    // Click dislike again — should toggle off
+    await dislikeBtn.click();
   });
 
   test("displays streaming error", async ({ page }) => {
@@ -430,6 +521,10 @@ test.describe("Session switching while streaming", () => {
     // Stream completed — persisted message visible from refetch
     await expect(page.getByText("Alpha done instantly.")).toBeVisible();
     await expect(page.getByTitle("Stop generating")).not.toBeVisible();
+
+    // Feedback buttons visible on completed message
+    await expect(page.getByTitle("Good response")).toBeVisible();
+    await expect(page.getByTitle("Bad response")).toBeVisible();
 
     // Session 2: still streaming (no DONE)
     await page.route("**/api/sessions/s2/chat/send", (route) =>

@@ -63,6 +63,11 @@
 
   "agentMessage.name": "Mano",
 
+  "errorBlock.retry": "Retry",
+
+  "feedback.like": "Good response",
+  "feedback.dislike": "Bad response",
+
   "askUserDialog.title": "Mano needs your input",
   "askUserDialog.placeholder": "Type your answer...",
   "askUserDialog.submit": "Submit",

@@ -47,7 +47,10 @@ export interface Message {
 export interface ToolCallData {
   id: string;
   name: string;
-  arguments: string;
+  /** OpenAI format (JSON string) */
+  arguments?: string;
+  /** LangChain format (parsed object) — backend stores this */
+  args?: Record<string, unknown>;
 }
 
 export interface TokenUsage {
@@ -66,6 +69,7 @@ export interface PaginatedSessions {
 export interface PaginatedMessages {
   messages: Message[];
   nextCursor: string | null;
+  feedbackMap?: Record<string, string>;
 }
 
 // ─── Auth ──────────────────────────────────────────────────────────────────

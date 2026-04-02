@@ -1,5 +1,7 @@
+import { ArrowLeft } from "lucide-react";
 import { type FC, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import { useSidebar } from "../contexts/sidebar-context.js";
 import { cn } from "../lib/utils.js";
 import { McpServersPage } from "./settings/mcp-servers-page.js";
@@ -16,6 +18,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
 
 export const SettingsPage: FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { isOpen } = useSidebar();
   const [activeTab, setActiveTab] = useState<Tab>("skills");
 
@@ -23,10 +26,17 @@ export const SettingsPage: FC = () => {
     <div className="flex flex-1 flex-col">
       <div
         className={cn(
-          "flex h-12 shrink-0 items-center px-5 text-sm font-medium text-[var(--fg)]",
+          "flex h-12 shrink-0 items-center gap-1 px-5 text-sm font-medium text-[var(--fg)]",
           !isOpen && "pl-12",
         )}
       >
+        <button
+          type="button"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[var(--fg-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
+          onClick={() => navigate(-1)}
+        >
+          <ArrowLeft size={16} strokeWidth={1.75} />
+        </button>
         {t("settings.title")}
       </div>
       <div className="flex-1 overflow-y-auto px-6 py-4">

@@ -110,23 +110,29 @@ describe("streamingReducer", () => {
       expect(state.contentBlocks[0]).toMatchObject({ status: "running" });
     });
 
-    it("marks done on successful RESULT", () => {
+    it("marks done on successful RESULT and stores resultContent", () => {
       const state = reduce([
         { type: "RESPONSE_START", responseId: "r1" },
         { type: "TOOL_CALL_START", toolCallId: "tc1", name: "read_file" },
         { type: "TOOL_CALL_END", toolCallId: "tc1" },
         { type: "TOOL_RESULT", toolCallId: "tc1", content: "file contents", isError: false },
       ]);
-      expect(state.contentBlocks[0]).toMatchObject({ status: "done" });
+      expect(state.contentBlocks[0]).toMatchObject({
+        status: "done",
+        resultContent: "file contents",
+      });
     });
 
-    it("marks error on failed RESULT", () => {
+    it("marks error on failed RESULT and stores resultContent", () => {
       const state = reduce([
         { type: "RESPONSE_START", responseId: "r1" },
         { type: "TOOL_CALL_START", toolCallId: "tc1", name: "read_file" },
         { type: "TOOL_RESULT", toolCallId: "tc1", content: "not found", isError: true },
       ]);
-      expect(state.contentBlocks[0]).toMatchObject({ status: "error" });
+      expect(state.contentBlocks[0]).toMatchObject({
+        status: "error",
+        resultContent: "not found",
+      });
     });
   });
 

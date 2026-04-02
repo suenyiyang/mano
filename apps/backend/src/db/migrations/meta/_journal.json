@@ -22,6 +22,13 @@
       "when": 1775053688472,
       "tag": "0002_overrated_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775135212501,
+      "tag": "0003_blushing_moonstone",
+      "breakpoints": true
     }
   ]
 }

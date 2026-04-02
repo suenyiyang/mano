@@ -15,6 +15,10 @@ export const insertSseEvent = async (
   return rows[0]!;
 };
 
+export const deleteSseEventsByResponseId = async (db: Db, responseId: string) => {
+  await db.delete(sseEvents).where(eq(sseEvents.responseId, responseId));
+};
+
 export const findEventsAfter = async (db: Db, responseId: string, afterId?: number) => {
   const conditions = [eq(sseEvents.responseId, responseId)];
   if (afterId !== undefined) {

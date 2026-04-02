@@ -2,12 +2,16 @@ import type { FC } from "react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../types/message-turn.js";
 import { ContentBlockRenderer } from "./content-block-renderer.js";
+import { FeedbackButtons } from "./feedback-buttons.js";
 import { StreamingIndicator } from "./streaming-indicator.js";
 
 interface AgentMessageProps {
   timestamp: string;
   blocks: ContentBlock[];
   isStreaming?: boolean;
+  onRetry?: () => void;
+  feedback?: "like" | "dislike" | null;
+  onFeedback?: (feedback: "like" | "dislike" | null) => void;
 }
 
 export const AgentMessage: FC<AgentMessageProps> = (props) => {
@@ -23,8 +27,11 @@ export const AgentMessage: FC<AgentMessageProps> = (props) => {
         <span className="text-[13px] font-semibold text-[var(--fg)]">{t("agentMessage.name")}</span>
         <span className="text-xs text-[var(--fg-faint)]">{timeStr}</span>
       </div>
-      <ContentBlockRenderer blocks={props.blocks} />
+      <ContentBlockRenderer blocks={props.blocks} onRetry={props.onRetry} />
       {props.isStreaming && <StreamingIndicator />}
+      {!props.isStreaming && props.blocks.length > 0 && props.onFeedback && (
+        <FeedbackButtons feedback={props.feedback ?? null} onFeedback={props.onFeedback} />
+      )}
     </div>
   );
 };

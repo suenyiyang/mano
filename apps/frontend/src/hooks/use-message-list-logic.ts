@@ -33,9 +33,12 @@ export const useMessageListLogic = (props: UseMessageListLogicProps) => {
 
   const turns = useMemo(() => groupMessages(messages), [messages]);
 
+  const feedbackMap = useMemo(() => query.data?.pages[0]?.feedbackMap ?? {}, [query.data]);
+
   return {
     messages,
     turns,
+    feedbackMap,
     fetchNextPage: query.fetchNextPage,
     hasNextPage: query.hasNextPage,
     isFetchingNextPage: query.isFetchingNextPage,

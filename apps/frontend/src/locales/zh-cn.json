@@ -63,6 +63,11 @@
 
   "agentMessage.name": "Mano",
 
+  "errorBlock.retry": "重试",
+
+  "feedback.like": "好的回复",
+  "feedback.dislike": "差的回复",
+
   "askUserDialog.title": "Mano 需要你的输入",
   "askUserDialog.placeholder": "输入你的回答...",
   "askUserDialog.submit": "提交",

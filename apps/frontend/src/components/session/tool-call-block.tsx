@@ -1,38 +1,72 @@
 import { ChevronRight, Wrench } from "lucide-react";
-import type { FC } from "react";
+import { type FC, useState } from "react";
 
 interface ToolCallBlockProps {
   name: string;
-  label: string;
+  label: string | Record<string, unknown>;
   status: "running" | "done" | "error";
+  resultContent?: string;
 }
 
 export const ToolCallBlock: FC<ToolCallBlockProps> = (props) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isExpandable = !!props.resultContent;
+  const formattedLabel = formatLabel(props.label);
+
+  const handleClick = () => {
+    if (isExpandable) {
+      setIsExpanded((prev) => !prev);
+    }
+  };
+
   return (
-    <div className="my-2.5 flex cursor-pointer items-center gap-1.5 text-[13px] text-[var(--fg-muted)] hover:text-[var(--fg)]">
-      <Wrench size={14} strokeWidth={1.75} className="shrink-0" />
-      <span className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>
-        {props.name}
-      </span>
-      {props.label && (
-        <span className="text-xs text-[var(--fg-faint)]">{formatLabel(props.label)}</span>
+    <div className="my-2.5">
+      <div
+        className={`flex items-center gap-1.5 text-[13px] text-[var(--fg-muted)] hover:text-[var(--fg)] ${isExpandable ? "cursor-pointer" : ""}`}
+        onClick={handleClick}
+      >
+        <Wrench size={14} strokeWidth={1.75} className="shrink-0" />
+        <span className="text-xs" style={{ fontFamily: "var(--font-mono)" }}>
+          {props.name}
+          {formattedLabel && <span className="text-[var(--fg-faint)]">({formattedLabel})</span>}
+        </span>
+        {isExpandable && (
+          <span
+            className={`text-[var(--fg-faint)] transition-transform ${isExpanded ? "rotate-90" : ""}`}
+          >
+            <ChevronRight size={12} />
+          </span>
+        )}
+      </div>
+      {isExpanded && props.resultContent && (
+        <pre
+          className="mt-1.5 max-h-[300px] overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-[var(--bg-bubble)] p-3 text-[13px] leading-[1.5] text-[var(--fg-muted)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          {props.resultContent}
+        </pre>
       )}
-      <span className="text-[var(--fg-faint)]">
-        <ChevronRight size={12} />
-      </span>
     </div>
   );
 };
 
-const formatLabel = (label: string): string => {
-  // Try to extract a meaningful label from the tool arguments JSON
+const extractKey = (obj: Record<string, unknown>): string => {
+  const val = obj.path ?? obj.file_path ?? obj.filename ?? obj.query ?? obj.command;
+  return val != null ? String(val) : "";
+};
+
+const formatLabel = (label: unknown): string => {
+  // label may be a JSON string (streaming) or a parsed object (persisted from DB)
+  if (typeof label === "object" && label !== null) {
+    return extractKey(label as Record<string, unknown>);
+  }
+  if (typeof label !== "string" || !label) {
+    return "";
+  }
   try {
     const parsed = JSON.parse(label);
-    // Common patterns: file path, query, etc.
     if (typeof parsed === "object" && parsed !== null) {
-      return (
-        parsed.path ?? parsed.file_path ?? parsed.filename ?? parsed.query ?? parsed.command ?? ""
-      );
+      return extractKey(parsed as Record<string, unknown>);
     }
     return String(parsed);
   } catch {

@@ -1,8 +1,9 @@
 import {
-  type AIMessage,
+  AIMessage,
   type AIMessageChunk,
   HumanMessage,
   SystemMessage,
+  ToolMessage,
 } from "@langchain/core/messages";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatVolcengine } from "./chat-volcengine.js";
@@ -787,6 +788,55 @@ describe("ChatVolcengine", () => {
       await expect(model._generate([new HumanMessage("Hi")], {})).rejects.toThrow(
         "invalid_request",
       );
+    });
+
+    it("uses role-based message format for multi-turn with tool calls", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify(RESPONSES_BASIC), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+      const model = createModel({ useResponsesApi: true });
+      await model._generate(
+        [
+          new SystemMessage("You are helpful."),
+          new HumanMessage("Hello"),
+          new AIMessage({
+            content: "",
+            tool_calls: [{ id: "call_123", name: "ask_user", args: { question: "What topic?" } }],
+          }),
+          new ToolMessage({ content: "Science", tool_call_id: "call_123", name: "ask_user" }),
+        ],
+        {},
+      );
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      const input = body.input;
+
+      // All items should use role-based format with content
+      expect(input).toHaveLength(4);
+      expect(input[0]).toEqual({ role: "system", content: "You are helpful." });
+      expect(input[1]).toEqual({ role: "user", content: "Hello" });
+      expect(input[2]).toMatchObject({
+        role: "assistant",
+        tool_calls: [
+          {
+            id: "call_123",
+            type: "function",
+            function: { name: "ask_user", arguments: '{"question":"What topic?"}' },
+          },
+        ],
+      });
+      expect(input[3]).toEqual({ role: "tool", content: "Science", tool_call_id: "call_123" });
+
+      // Should NOT contain OpenAI-style function_call/function_call_output items
+      const hasOpenAIItems = input.some(
+        (item: { type?: string }) =>
+          item.type === "function_call" || item.type === "function_call_output",
+      );
+      expect(hasOpenAIItems).toBe(false);
     });
   });
 

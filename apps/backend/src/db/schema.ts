@@ -112,6 +112,29 @@ export const messages = pgTable(
   ],
 );
 
+// ─── Message Feedback ──────────────────────────────────────────────────────
+
+export const messageFeedback = pgTable(
+  "message_feedback",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    responseId: text("response_id").notNull(),
+    feedback: text().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("message_feedback_user_response").on(t.userId, t.responseId),
+    index("idx_message_feedback_session").on(t.sessionId),
+  ],
+);
+
 // ─── SSE Events (ephemeral, for resume) ─────────────────────────────────────
 
 export const sseEvents = pgTable(

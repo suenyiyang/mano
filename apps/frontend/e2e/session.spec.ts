@@ -136,6 +136,15 @@ test.describe("Session page (/app/:sessionId)", () => {
 
     await expect(page.getByText("Let me write the file.")).toBeVisible();
     await expect(page.getByText("write_file")).toBeVisible();
+
+    // Tool result is hidden until expanded
+    await expect(page.getByText("File written successfully")).not.toBeVisible();
+    // Click tool call to expand
+    await page.getByText("write_file").click();
+    await expect(page.getByText("File written successfully")).toBeVisible();
+    // Click again to collapse
+    await page.getByText("write_file").click();
+    await expect(page.getByText("File written successfully")).not.toBeVisible();
   });
 
   test("navigating between sessions changes content", async ({ page }) => {

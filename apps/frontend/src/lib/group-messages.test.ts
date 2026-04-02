@@ -92,6 +92,39 @@ describe("groupMessages", () => {
         type: "tool_call",
         name: "read_file",
         status: "done",
+        resultContent: "file contents",
+      });
+    }
+  });
+
+  it("handles tool calls with args field (LangChain format from DB)", () => {
+    const turns = groupMessages([
+      makeMsg({
+        id: "m1",
+        role: "assistant",
+        content: "",
+        responseId: "r1",
+        toolCalls: [{ id: "tc1", name: "read_file", args: { path: "a.ts" } }] as never,
+        ordinal: 1,
+      }),
+      makeMsg({
+        id: "m2",
+        role: "tool",
+        content: "file contents",
+        responseId: "r1",
+        toolCallId: "tc1",
+        toolName: "read_file",
+        ordinal: 2,
+      }),
+    ]);
+
+    expect(turns).toHaveLength(1);
+    if (turns[0]?.type === "agent") {
+      expect(turns[0].blocks[0]).toMatchObject({
+        type: "tool_call",
+        name: "read_file",
+        label: { path: "a.ts" },
+        resultContent: "file contents",
       });
     }
   });

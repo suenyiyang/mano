@@ -6,10 +6,12 @@ export type ContentBlock =
       type: "tool_call";
       toolCallId: string;
       name: string;
-      label: string;
+      label: string | Record<string, unknown>;
       status: "running" | "done" | "error";
+      resultContent?: string;
     }
-  | { type: "step"; label: string; status: "running" | "done" };
+  | { type: "step"; label: string; status: "running" | "done" }
+  | { type: "error"; message: string };
 
 export type MessageTurn =
   | { type: "user"; message: Message }

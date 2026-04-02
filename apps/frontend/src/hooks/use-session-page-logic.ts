@@ -61,10 +61,16 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
 
     if (wasStreaming.current && !streamingState.isStreaming) {
       setPendingUserMessage(null);
-      // Refetch persisted messages, then clear streaming blocks so turns take over
-      queryClient
-        .invalidateQueries({ queryKey: ["messages", props.sessionId] })
-        .then(() => dispatch({ type: "RESET" }));
+      if (streamingState.error) {
+        // Error state: keep streaming blocks visible so the inline error block
+        // stays rendered. RESET happens when the user retries (RESPONSE_START)
+        // or navigates away (session switch RESET).
+      } else {
+        // Refetch persisted messages, then clear streaming blocks so turns take over
+        queryClient
+          .invalidateQueries({ queryKey: ["messages", props.sessionId] })
+          .then(() => dispatch({ type: "RESET" }));
+      }
     }
     wasStreaming.current = streamingState.isStreaming;
   }, [streamingState.isStreaming, props.sessionId, queryClient, dispatch]);
@@ -82,6 +88,40 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
     onSend: handleSend,
     isStreaming: streamingState.isStreaming,
   });
+
+  // ─── Feedback ─────────────────────────────────────────────────────────
+
+  const [localFeedback, setLocalFeedback] = useState<Record<string, string>>({});
+
+  // Merge server feedback with optimistic local state
+  const feedbackMap = { ...messageList.feedbackMap, ...localFeedback };
+
+  const feedbackMutation = useMutation({
+    mutationFn: async (input: { responseId: string; feedback: "like" | "dislike" | null }) => {
+      await apiClient.post(`/sessions/${props.sessionId}/feedback`, input);
+    },
+  });
+
+  const handleFeedback = useCallback(
+    (responseId: string, feedback: "like" | "dislike" | null) => {
+      setLocalFeedback((prev) => {
+        const next = { ...prev };
+        if (feedback === null) {
+          delete next[responseId];
+        } else {
+          next[responseId] = feedback;
+        }
+        return next;
+      });
+      feedbackMutation.mutate({ responseId, feedback });
+    },
+    [feedbackMutation],
+  );
+
+  // Reset local feedback when switching sessions
+  useEffect(() => {
+    setLocalFeedback({});
+  }, [props.sessionId]);
 
   // ─── Topbar actions ───────────────────────────────────────────────────
 
@@ -277,8 +317,17 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
       pendingUserMessage,
       streamingBlocks: streamingState.contentBlocks,
       isStreaming: streamingState.isStreaming,
+      onRetry:
+        streamingState.error && streamingState.responseId
+          ? () => {
+              const id = streamingState.responseId;
+              if (id) chatSend.retry(id);
+            }
+          : undefined,
       scrollRef,
       onScroll: autoScroll.onScroll,
+      feedbackMap,
+      onFeedback: handleFeedback,
     },
     chatInputProps: {
       ...chatInputProps,
@@ -287,7 +336,6 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
       placeholder: t("chatInput.followUpPlaceholder"),
       maxWidth: "720px",
     },
-    streamingError: streamingState.error,
     askUserDialogProps: {
       open: streamingState.askUser !== null,
       question: streamingState.askUser?.question ?? "",

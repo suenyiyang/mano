@@ -142,6 +142,92 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
     [props.sessionId, props.dispatch, queryClient],
   );
 
+  const retry = useCallback(
+    async (responseId: string) => {
+      if (abortRef.current && !abortRef.current.signal.aborted) return;
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        await queryClient.cancelQueries({ queryKey: ["messages", props.sessionId] });
+        if (controller.signal.aborted) return;
+
+        // Optimistically remove the failed generation's non-user messages from cache.
+        // The backend deletes them too — this prevents a flash of old messages
+        // when RESPONSE_START changes the responseId and the filter no longer excludes them.
+        queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+          ["messages", props.sessionId],
+          (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page) => ({
+                ...page,
+                messages: page.messages.filter(
+                  (m) => m.responseId !== responseId || m.role === "user",
+                ),
+              })),
+            };
+          },
+        );
+
+        await createSseClient({
+          url: `/api/sessions/${props.sessionId}/chat/retry`,
+          method: "POST",
+          body: { responseId },
+          signal: controller.signal,
+          onEvent: (eventType, data) => {
+            try {
+              const parsed = JSON.parse(data);
+              const event = { ...parsed, type: eventType } as SseEvent;
+
+              if (event.type === "response_start") {
+                responseIdRef.current = event.responseId;
+              }
+
+              if (event.type === "session_update") {
+                queryClient.setQueryData(["session", props.sessionId], event.session);
+                queryClient.setQueryData<InfiniteData<PaginatedSessions>>(["sessions"], (old) => {
+                  if (!old) return old;
+                  return {
+                    ...old,
+                    pages: old.pages.map((page) => ({
+                      ...page,
+                      sessions: page.sessions.map((s) =>
+                        s.id === event.session.id ? event.session : s,
+                      ),
+                    })),
+                  };
+                });
+                return;
+              }
+
+              dispatchSseEvent(event, props.dispatch);
+            } catch {
+              // Ignore malformed events
+            }
+          },
+          onError: (error) => {
+            props.dispatch({ type: "ERROR", error: error.message });
+          },
+        });
+
+        queryClient.invalidateQueries({ queryKey: ["messages", props.sessionId] });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        props.dispatch({
+          type: "ERROR",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      } finally {
+        abortRef.current = null;
+        responseIdRef.current = null;
+      }
+    },
+    [props.sessionId, props.dispatch, queryClient],
+  );
+
   const terminate = useCallback(async () => {
     abortRef.current?.abort();
     const responseId = responseIdRef.current;
@@ -156,7 +242,7 @@ export const useChatSendLogic = (props: UseChatSendLogicProps) => {
     }
   }, [props.sessionId]);
 
-  return { send, terminate };
+  return { send, retry, terminate };
 };
 
 const dispatchSseEvent = (event: SseEvent, dispatch: (action: StreamingAction) => void) => {

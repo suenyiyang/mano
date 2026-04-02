@@ -73,6 +73,7 @@ export const streamingReducer = (
     }
 
     case "TOOL_CALL_START": {
+      if (action.name === "ask_user") return state;
       const blocks = [...state.contentBlocks];
       blocks.push({
         type: "tool_call",
@@ -105,6 +106,7 @@ export const streamingReducer = (
           return {
             ...block,
             status: action.isError ? ("error" as const) : ("done" as const),
+            resultContent: action.content,
           };
         }
         return block;
@@ -139,6 +141,7 @@ export const streamingReducer = (
         isStreaming: false,
         askUser: null,
         error: action.error,
+        contentBlocks: [...state.contentBlocks, { type: "error" as const, message: action.error }],
       };
 
     case "CLEAR_ASK_USER":

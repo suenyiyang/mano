@@ -10,10 +10,19 @@ import {
   findGenerationByResponseId,
   updateGenerationStatus,
 } from "../db/queries/active-generations.js";
-import { findAllMessagesBySession, getNextOrdinal, insertMessage } from "../db/queries/messages.js";
+import {
+  deleteNonUserMessagesByResponseId,
+  findAllMessagesBySession,
+  getNextOrdinal,
+  insertMessage,
+} from "../db/queries/messages.js";
 import { addTokensToDailyUsage } from "../db/queries/rate-limits.js";
 import { findSessionById, updateSession } from "../db/queries/sessions.js";
-import { findEventsAfter, insertSseEvent } from "../db/queries/sse-events.js";
+import {
+  deleteSseEventsByResponseId,
+  findEventsAfter,
+  insertSseEvent,
+} from "../db/queries/sse-events.js";
 import { createAgentForSession, createModelInstance, dbMessagesToLangChain } from "../lib/agent.js";
 import { generateResponseId } from "../lib/id.js";
 import type { ModelConfig } from "../lib/model-config.js";
@@ -29,6 +38,10 @@ const chatSendSchema = z.object({
 });
 
 const chatTerminateSchema = z.object({
+  responseId: z.string().min(1),
+});
+
+const chatRetrySchema = z.object({
   responseId: z.string().min(1),
 });
 
@@ -126,6 +139,259 @@ const generateAndEmitTitle = async (
   }
 };
 
+/**
+ * Shared agent streaming logic used by both /send and /retry.
+ * Handles: response_start, agent creation, event streaming, message persistence,
+ * error handling, and cleanup.
+ */
+const runAgentStream = async (opts: {
+  db: Db;
+  session: { id: string; systemPrompt: string | null; title: string | null };
+  userId: string;
+  responseId: string;
+  controller: AbortController;
+  emitter: EventEmitter;
+  emit: (event: string, data: unknown) => Promise<void>;
+  modelConfig: ModelConfig;
+  model: ReturnType<typeof createModelInstance>;
+  generateTitleContent?: string;
+}) => {
+  const { db, session, userId, responseId, controller, emitter, emit, modelConfig, model } = opts;
+
+  let mcpManager: Awaited<ReturnType<typeof createAgentForSession>>["mcpManager"] | undefined;
+
+  try {
+    await emit("response_start", { responseId });
+
+    // Generate title for untitled sessions (fire-and-forget)
+    if (opts.generateTitleContent && !session.title) {
+      generateAndEmitTitle(db, session.id, opts.generateTitleContent, modelConfig, emit).catch(
+        () => {},
+      );
+    }
+
+    // Create ask_user resolver that blocks until user responds via /respond.
+    const askUserResolver = (_question: string, _options?: string[]): Promise<string> => {
+      const existing = pendingAskUser.get(responseId);
+      if (existing) {
+        return existing.promise;
+      }
+      let resolveRef!: (answer: string) => void;
+      const promise = new Promise<string>((resolve) => {
+        resolveRef = resolve;
+      });
+      pendingAskUser.set(responseId, { resolve: resolveRef, promise });
+      return promise;
+    };
+
+    // Create agent with all tools
+    const result = await createAgentForSession({
+      model,
+      systemPrompt: session.systemPrompt,
+      db,
+      userId,
+      askUserResolver,
+    });
+    mcpManager = result.mcpManager;
+    const agent = result.agent;
+
+    // Build conversation history
+    const dbMessages = await findAllMessagesBySession(db, session.id);
+    const langchainMessages = dbMessagesToLangChain(dbMessages);
+
+    // Stream agent events
+    let nextOrdinal = await getNextOrdinal(db, session.id);
+    let accumulatedText = "";
+    const toolCallNames = new Map<string, string>();
+    let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+
+    const eventStream = agent.streamEvents(
+      { messages: langchainMessages },
+      { version: "v2", signal: controller.signal },
+    );
+
+    for await (const event of eventStream) {
+      if (controller.signal.aborted) break;
+
+      // LLM token streaming
+      if (event.event === "on_chat_model_stream") {
+        const chunk = event.data?.chunk;
+        if (!chunk) continue;
+
+        // Text content
+        const textContent =
+          typeof chunk.content === "string"
+            ? chunk.content
+            : Array.isArray(chunk.content)
+              ? chunk.content
+                  .filter((b: { type: string }) => b.type === "text")
+                  .map((b: { text: string }) => b.text)
+                  .join("")
+              : "";
+
+        if (textContent) {
+          accumulatedText += textContent;
+          await emit("text_delta", { text: textContent });
+        }
+
+        // Tool call chunks
+        const toolChunks = chunk.tool_call_chunks;
+        if (Array.isArray(toolChunks)) {
+          for (const tc of toolChunks) {
+            if (tc.id && tc.name && !toolCallNames.has(tc.id)) {
+              toolCallNames.set(tc.id, tc.name);
+              await emit("tool_call_start", {
+                toolCallId: tc.id,
+                name: tc.name,
+              });
+            }
+            if (tc.args) {
+              await emit("tool_call_delta", {
+                toolCallId: tc.id ?? tc.index?.toString(),
+                argumentsDelta: tc.args,
+              });
+            }
+          }
+        }
+      }
+
+      // LLM finished generating (may have tool calls)
+      if (event.event === "on_chat_model_end") {
+        const output = event.data?.output;
+        const toolCalls = output?.tool_calls;
+
+        // Emit tool_call lifecycle events for each tool call
+        if (Array.isArray(toolCalls)) {
+          for (const tc of toolCalls) {
+            // Synthesize start+delta for models that don't stream tool_call_chunks
+            if (!toolCallNames.has(tc.id)) {
+              toolCallNames.set(tc.id, tc.name);
+              await emit("tool_call_start", { toolCallId: tc.id, name: tc.name });
+              if (tc.args) {
+                await emit("tool_call_delta", {
+                  toolCallId: tc.id,
+                  argumentsDelta: JSON.stringify(tc.args),
+                });
+              }
+            }
+            await emit("tool_call_end", { toolCallId: tc.id });
+
+            // Emit ask_user SSE event when agent calls ask_user.
+            if (tc.name === "ask_user") {
+              if (!pendingAskUser.has(responseId)) {
+                let resolveRef!: (answer: string) => void;
+                const promise = new Promise<string>((resolve) => {
+                  resolveRef = resolve;
+                });
+                pendingAskUser.set(responseId, { resolve: resolveRef, promise });
+              }
+              await emit("ask_user", {
+                toolCallId: tc.id,
+                question: tc.args?.question,
+                options: tc.args?.options,
+              });
+            }
+          }
+        }
+
+        // Extract usage if available
+        const usage = output?.usage_metadata;
+        if (usage) {
+          totalUsage = {
+            promptTokens: usage.input_tokens ?? 0,
+            completionTokens: usage.output_tokens ?? 0,
+            totalTokens: (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
+          };
+        }
+
+        // Persist assistant message
+        if (accumulatedText || (Array.isArray(toolCalls) && toolCalls.length > 0)) {
+          const assistantMessage = await insertMessage(db, {
+            sessionId: session.id,
+            role: "assistant",
+            content: accumulatedText || "",
+            toolCalls: toolCalls ?? undefined,
+            ordinal: nextOrdinal++,
+            modelId: modelConfig.apiModelId,
+            responseId,
+            tokenUsage: totalUsage,
+          });
+
+          await emit("message_complete", { message: assistantMessage });
+        }
+
+        // Reset for next LLM turn (after tool execution)
+        accumulatedText = "";
+      }
+
+      // Tool execution completed
+      if (event.event === "on_tool_end") {
+        const output = event.data?.output;
+        const content =
+          typeof output === "string"
+            ? output
+            : typeof output?.content === "string"
+              ? output.content
+              : JSON.stringify(output?.content ?? output);
+
+        const toolCallId = output?.tool_call_id ?? "";
+        const toolName = output?.name ?? toolCallNames.get(toolCallId) ?? event.name ?? "";
+        const isError = output?.status === "error";
+
+        // Persist tool message
+        const toolMessage = await insertMessage(db, {
+          sessionId: session.id,
+          role: "tool",
+          content,
+          toolCallId,
+          toolName,
+          ordinal: nextOrdinal++,
+          responseId,
+        });
+
+        await emit("tool_result", {
+          toolCallId,
+          content,
+          isError,
+        });
+
+        await emit("message_complete", { message: toolMessage });
+      }
+    }
+
+    // Track token usage for rate limiting
+    if (totalUsage.totalTokens > 0) {
+      await addTokensToDailyUsage(db, userId, totalUsage.totalTokens);
+    }
+
+    await emit("done", { usage: totalUsage });
+    await updateGenerationStatus(db, responseId, "completed");
+  } catch (error) {
+    if (controller.signal.aborted) {
+      await updateGenerationStatus(db, responseId, "cancelled");
+    } else {
+      // Unwrap nested MiddlewareError chain to find the true root cause
+      let rootCause: unknown = error;
+      while (rootCause instanceof Error && rootCause.cause instanceof Error) {
+        rootCause = rootCause.cause;
+      }
+      const message = rootCause instanceof Error ? rootCause.message : "Unknown error";
+      const stack = rootCause instanceof Error ? rootCause.stack : undefined;
+      console.error("[AGENT_ERROR] Root cause:", rootCause);
+      await emit("error", { error: message, code: "AGENT_ERROR", stack });
+      await updateGenerationStatus(db, responseId, "failed");
+    }
+  } finally {
+    activeControllers.delete(responseId);
+    pendingAskUser.delete(responseId);
+    emitter.emit("done");
+    activeEmitters.delete(responseId);
+    if (mcpManager) {
+      mcpManager.disconnectAll().catch(() => {});
+    }
+  }
+};
+
 export const chatRoutes = new Hono<AppEnv>();
 
 chatRoutes.use("/*", authMiddleware);
@@ -173,251 +439,77 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
 
   const stream = createSseStream(async (send) => {
     const emit = createEventSender(db, responseId, session.id, send, emitter);
+    await runAgentStream({
+      db,
+      session,
+      userId: c.var.userId,
+      responseId,
+      controller,
+      emitter,
+      emit,
+      modelConfig,
+      model,
+      generateTitleContent: body.content,
+    });
+  });
 
-    // MCP manager reference for cleanup
-    let mcpManager: Awaited<ReturnType<typeof createAgentForSession>>["mcpManager"] | undefined;
+  return new Response(stream, { headers: SSE_HEADERS });
+});
 
-    try {
-      await emit("response_start", { responseId });
+// Retry a failed generation
+chatRoutes.post("/:id/chat/retry", rateLimitMiddleware, async (c) => {
+  const db = c.var.db;
+  const session = await findSessionById(db, c.req.param("id"));
+  if (!session) {
+    throw notFound("Session not found");
+  }
+  if (session.userId !== c.var.userId) {
+    throw forbidden();
+  }
 
-      // Generate title for untitled sessions (fire-and-forget)
-      if (!session.title) {
-        generateAndEmitTitle(db, session.id, body.content, modelConfig, emit).catch(() => {});
-      }
+  const body = chatRetrySchema.parse(await c.req.json());
 
-      // Create ask_user resolver that blocks until user responds via /respond.
-      // If on_chat_model_end already set up the pending entry, reuse its promise.
-      // Otherwise create a new one (fallback for unexpected ordering).
-      const askUserResolver = (_question: string, _options?: string[]): Promise<string> => {
-        const existing = pendingAskUser.get(responseId);
-        if (existing) {
-          return existing.promise;
-        }
-        let resolveRef!: (answer: string) => void;
-        const promise = new Promise<string>((resolve) => {
-          resolveRef = resolve;
-        });
-        pendingAskUser.set(responseId, { resolve: resolveRef, promise });
-        return promise;
-      };
+  // Verify the generation exists, belongs to this session, and failed
+  const generation = await findGenerationByResponseId(db, body.responseId);
+  if (!generation || generation.sessionId !== session.id) {
+    throw notFound("Generation not found for this session");
+  }
+  if (generation.status !== "failed") {
+    throw badRequest("Can only retry a failed generation");
+  }
 
-      // Create agent with all tools
-      const result = await createAgentForSession({
-        model,
-        systemPrompt: session.systemPrompt,
-        db,
-        userId: c.var.userId,
-        askUserResolver,
-      });
-      mcpManager = result.mcpManager;
-      const agent = result.agent;
+  // Clean up the failed generation's partial messages (keep user message)
+  await deleteNonUserMessagesByResponseId(db, body.responseId);
+  await deleteSseEventsByResponseId(db, body.responseId);
 
-      // Build conversation history
-      const dbMessages = await findAllMessagesBySession(db, session.id);
-      const langchainMessages = dbMessagesToLangChain(dbMessages);
+  // Start a new generation with a fresh responseId
+  const responseId = generateResponseId();
+  const newGeneration = await acquireGenerationLock(db, { responseId, sessionId: session.id });
+  if (!newGeneration) {
+    throw conflict("A generation is already in progress for this session");
+  }
 
-      // Stream agent events
-      let nextOrdinal = ordinal + 1;
-      let accumulatedText = "";
-      const toolCallNames = new Map<string, string>();
-      let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  const modelConfig = getModelConfig();
+  const model = createModelInstance(modelConfig);
 
-      const eventStream = agent.streamEvents(
-        { messages: langchainMessages },
-        { version: "v2", signal: controller.signal },
-      );
+  const controller = new AbortController();
+  activeControllers.set(responseId, controller);
+  const emitter = new EventEmitter();
+  activeEmitters.set(responseId, emitter);
 
-      for await (const event of eventStream) {
-        if (controller.signal.aborted) break;
-
-        // LLM token streaming
-        if (event.event === "on_chat_model_stream") {
-          const chunk = event.data?.chunk;
-          if (!chunk) continue;
-
-          // Text content
-          const textContent =
-            typeof chunk.content === "string"
-              ? chunk.content
-              : Array.isArray(chunk.content)
-                ? chunk.content
-                    .filter((b: { type: string }) => b.type === "text")
-                    .map((b: { text: string }) => b.text)
-                    .join("")
-                : "";
-
-          if (textContent) {
-            accumulatedText += textContent;
-            await emit("text_delta", { text: textContent });
-          }
-
-          // Tool call chunks
-          const toolChunks = chunk.tool_call_chunks;
-          if (Array.isArray(toolChunks)) {
-            for (const tc of toolChunks) {
-              if (tc.id && tc.name && !toolCallNames.has(tc.id)) {
-                toolCallNames.set(tc.id, tc.name);
-                await emit("tool_call_start", {
-                  toolCallId: tc.id,
-                  name: tc.name,
-                });
-              }
-              if (tc.args) {
-                await emit("tool_call_delta", {
-                  toolCallId: tc.id ?? tc.index?.toString(),
-                  argumentsDelta: tc.args,
-                });
-              }
-            }
-          }
-        }
-
-        // LLM finished generating (may have tool calls)
-        if (event.event === "on_chat_model_end") {
-          const output = event.data?.output;
-          const toolCalls = output?.tool_calls;
-
-          // Emit tool_call lifecycle events for each tool call
-          if (Array.isArray(toolCalls)) {
-            for (const tc of toolCalls) {
-              // Synthesize start+delta for models that don't stream tool_call_chunks
-              if (!toolCallNames.has(tc.id)) {
-                toolCallNames.set(tc.id, tc.name);
-                await emit("tool_call_start", { toolCallId: tc.id, name: tc.name });
-                if (tc.args) {
-                  await emit("tool_call_delta", {
-                    toolCallId: tc.id,
-                    argumentsDelta: JSON.stringify(tc.args),
-                  });
-                }
-              }
-              await emit("tool_call_end", { toolCallId: tc.id });
-
-              // Emit ask_user SSE event when agent calls ask_user.
-              // Set up pendingAskUser BEFORE emitting the SSE so the entry is
-              // ready by the time the frontend receives the event and responds.
-              if (tc.name === "ask_user") {
-                if (!pendingAskUser.has(responseId)) {
-                  let resolveRef!: (answer: string) => void;
-                  const promise = new Promise<string>((resolve) => {
-                    resolveRef = resolve;
-                  });
-                  pendingAskUser.set(responseId, { resolve: resolveRef, promise });
-                }
-                await emit("ask_user", {
-                  toolCallId: tc.id,
-                  question: tc.args?.question,
-                  options: tc.args?.options,
-                });
-              }
-            }
-          }
-
-          // Extract usage if available
-          const usage = output?.usage_metadata;
-          if (usage) {
-            totalUsage = {
-              promptTokens: usage.input_tokens ?? 0,
-              completionTokens: usage.output_tokens ?? 0,
-              totalTokens: (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
-            };
-          }
-
-          // Persist assistant message
-          if (accumulatedText || (Array.isArray(toolCalls) && toolCalls.length > 0)) {
-            const assistantMessage = await insertMessage(db, {
-              sessionId: session.id,
-              role: "assistant",
-              content: accumulatedText || "",
-              toolCalls: toolCalls ?? undefined,
-              ordinal: nextOrdinal++,
-              modelId: modelConfig.apiModelId,
-              responseId,
-              tokenUsage: totalUsage,
-            });
-
-            await emit("message_complete", { message: assistantMessage });
-          }
-
-          // Reset for next LLM turn (after tool execution)
-          accumulatedText = "";
-        }
-
-        // Tool execution completed
-        if (event.event === "on_tool_end") {
-          const output = event.data?.output;
-          // output is a ToolMessage or a string
-          const content =
-            typeof output === "string"
-              ? output
-              : typeof output?.content === "string"
-                ? output.content
-                : JSON.stringify(output?.content ?? output);
-
-          const toolCallId = output?.tool_call_id ?? "";
-          const toolName = output?.name ?? toolCallNames.get(toolCallId) ?? event.name ?? "";
-          const isError = output?.status === "error";
-
-          // Persist tool message
-          const toolMessage = await insertMessage(db, {
-            sessionId: session.id,
-            role: "tool",
-            content,
-            toolCallId,
-            toolName,
-            ordinal: nextOrdinal++,
-            responseId,
-          });
-
-          await emit("tool_result", {
-            toolCallId,
-            content,
-            isError,
-          });
-
-          await emit("message_complete", { message: toolMessage });
-        }
-      }
-
-      // Auto-compaction: if total tokens exceed threshold, compact older messages.
-      // DeepAgents' summarization middleware handles in-context compaction;
-      // here we persist that state to DB for the compact_summary field.
-      // We detect compaction by checking if the agent's context was trimmed
-      // (indicated by the summarization middleware modifying the message list).
-      // For now, emit done. The /compact endpoint handles explicit compaction.
-
-      // Track token usage for rate limiting
-      if (totalUsage.totalTokens > 0) {
-        await addTokensToDailyUsage(db, c.var.userId, totalUsage.totalTokens);
-      }
-
-      await emit("done", { usage: totalUsage });
-      await updateGenerationStatus(db, responseId, "completed");
-    } catch (error) {
-      if (controller.signal.aborted) {
-        await updateGenerationStatus(db, responseId, "cancelled");
-      } else {
-        // Unwrap nested MiddlewareError chain to find the true root cause
-        let rootCause: unknown = error;
-        while (rootCause instanceof Error && rootCause.cause instanceof Error) {
-          rootCause = rootCause.cause;
-        }
-        const message = rootCause instanceof Error ? rootCause.message : "Unknown error";
-        const stack = rootCause instanceof Error ? rootCause.stack : undefined;
-        console.error("[AGENT_ERROR] Root cause:", rootCause);
-        await emit("error", { error: message, code: "AGENT_ERROR", stack });
-        await updateGenerationStatus(db, responseId, "failed");
-      }
-    } finally {
-      activeControllers.delete(responseId);
-      pendingAskUser.delete(responseId);
-      emitter.emit("done");
-      activeEmitters.delete(responseId);
-      // Clean up MCP connections
-      if (mcpManager) {
-        mcpManager.disconnectAll().catch(() => {});
-      }
-    }
+  const stream = createSseStream(async (send) => {
+    const emit = createEventSender(db, responseId, session.id, send, emitter);
+    await runAgentStream({
+      db,
+      session,
+      userId: c.var.userId,
+      responseId,
+      controller,
+      emitter,
+      emit,
+      modelConfig,
+      model,
+    });
   });
 
   return new Response(stream, { headers: SSE_HEADERS });

@@ -29,11 +29,12 @@ export const groupMessages = (messages: Message[]): MessageTurn[] => {
       // Process tool calls from the assistant message
       const toolCalls = (msg.toolCalls ?? []) as ToolCallData[];
       for (const tc of toolCalls) {
+        if (tc.name === "ask_user") continue;
         blocks.push({
           type: "tool_call",
           toolCallId: tc.id,
           name: tc.name,
-          label: tc.arguments,
+          label: tc.arguments ?? tc.args ?? "",
           status: "done",
         });
       }
@@ -45,13 +46,14 @@ export const groupMessages = (messages: Message[]): MessageTurn[] => {
         const next = messages[i];
         if (!next) break;
         if (next.role === "tool" && next.responseId === responseId) {
-          // Update the matching tool call status
+          // Update the matching tool call status and attach result content
           const toolCallId = next.toolCallId;
           if (toolCallId) {
+            const resultContent = typeof next.content === "string" ? next.content : "";
             for (let j = 0; j < blocks.length; j++) {
               const block = blocks[j];
               if (block && block.type === "tool_call" && block.toolCallId === toolCallId) {
-                blocks[j] = { ...block, status: "done" };
+                blocks[j] = { ...block, status: "done", resultContent };
               }
             }
           }
@@ -64,11 +66,12 @@ export const groupMessages = (messages: Message[]): MessageTurn[] => {
           }
           const nextToolCalls = (next.toolCalls ?? []) as ToolCallData[];
           for (const tc of nextToolCalls) {
+            if (tc.name === "ask_user") continue;
             blocks.push({
               type: "tool_call",
               toolCallId: tc.id,
               name: tc.name,
-              label: tc.arguments,
+              label: tc.arguments ?? tc.args ?? "",
               status: "done",
             });
           }
