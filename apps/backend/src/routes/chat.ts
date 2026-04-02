@@ -10,14 +10,13 @@ import {
   findGenerationByResponseId,
   updateGenerationStatus,
 } from "../db/queries/active-generations.js";
-import { calculateCreditCost, deductCredits } from "../db/queries/credits.js";
 import {
   deleteNonUserMessagesByResponseId,
   findAllMessagesBySession,
   getNextOrdinal,
   insertMessage,
 } from "../db/queries/messages.js";
-import { selectModelForTier } from "../db/queries/model-tiers.js";
+import { selectModel } from "../db/queries/model-tiers.js";
 import { addTokensToDailyUsage } from "../db/queries/rate-limits.js";
 import { findSessionById, updateSession } from "../db/queries/sessions.js";
 import {
@@ -29,7 +28,6 @@ import { createAgentForSession, createModelInstance, dbMessagesToLangChain } fro
 import { generateResponseId } from "../lib/id.js";
 import type { ModelConfig } from "../lib/model-config.js";
 import { createSseStream, SSE_HEADERS, type SseSender } from "../lib/sse.js";
-import { authMiddleware } from "../middleware/auth.js";
 import { badRequest, conflict, forbidden, notFound } from "../middleware/error-handler.js";
 import { rateLimitMiddleware } from "../middleware/rate-limit.js";
 
@@ -156,7 +154,6 @@ const runAgentStream = async (opts: {
   modelConfig: ModelConfig;
   model: ReturnType<typeof createModelInstance>;
   generateTitleContent?: string;
-  creditConfig?: { creditsPerMillionInputTokens?: number; creditsPerMillionOutputTokens?: number };
 }) => {
   const { db, session, userId, responseId, controller, emitter, emit, modelConfig, model } = opts;
 
@@ -361,26 +358,9 @@ const runAgentStream = async (opts: {
       }
     }
 
-    // Track token usage and deduct credits
+    // Track token usage
     if (totalUsage.totalTokens > 0) {
       await addTokensToDailyUsage(db, userId, totalUsage.totalTokens);
-
-      if (opts.creditConfig) {
-        const cost = calculateCreditCost(
-          totalUsage.promptTokens,
-          totalUsage.completionTokens,
-          opts.creditConfig,
-        );
-        if (cost > 0) {
-          await deductCredits(db, {
-            userId,
-            amount: cost,
-            sessionId: session.id,
-            modelId: modelConfig.apiModelId,
-            description: `${modelConfig.displayName ?? modelConfig.apiModelId}: ${totalUsage.promptTokens} input + ${totalUsage.completionTokens} output tokens`,
-          });
-        }
-      }
     }
 
     await emit("done", { usage: totalUsage });
@@ -413,8 +393,6 @@ const runAgentStream = async (opts: {
 
 export const chatRoutes = new Hono<AppEnv>();
 
-chatRoutes.use("/*", authMiddleware);
-
 // Send message and get SSE response
 chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
   const db = c.var.db;
@@ -446,20 +424,15 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
     responseId,
   });
 
-  // Select model based on user tier
-  const userTier = c.var.userTier;
-  const selectedModel = await selectModelForTier(db, userTier);
+  // Select model
+  const selectedModel = await selectModel(db);
   if (!selectedModel) {
-    throw badRequest("No models available for your plan");
+    throw badRequest("No models available");
   }
   const modelConfig: ModelConfig = {
     provider: selectedModel.provider,
     apiModelId: selectedModel.apiModelId,
     displayName: selectedModel.displayName,
-  };
-  const creditConfig = selectedModel.config as {
-    creditsPerMillionInputTokens?: number;
-    creditsPerMillionOutputTokens?: number;
   };
   const model = createModelInstance(modelConfig);
 
@@ -482,7 +455,6 @@ chatRoutes.post("/:id/chat/send", rateLimitMiddleware, async (c) => {
       modelConfig,
       model,
       generateTitleContent: body.content,
-      creditConfig,
     });
   });
 
@@ -522,20 +494,15 @@ chatRoutes.post("/:id/chat/retry", rateLimitMiddleware, async (c) => {
     throw conflict("A generation is already in progress for this session");
   }
 
-  // Select model based on user tier
-  const userTier = c.var.userTier;
-  const selectedModel = await selectModelForTier(db, userTier);
+  // Select model
+  const selectedModel = await selectModel(db);
   if (!selectedModel) {
-    throw badRequest("No models available for your plan");
+    throw badRequest("No models available");
   }
   const modelConfig: ModelConfig = {
     provider: selectedModel.provider,
     apiModelId: selectedModel.apiModelId,
     displayName: selectedModel.displayName,
-  };
-  const creditConfig = selectedModel.config as {
-    creditsPerMillionInputTokens?: number;
-    creditsPerMillionOutputTokens?: number;
   };
   const model = createModelInstance(modelConfig);
 
@@ -556,7 +523,6 @@ chatRoutes.post("/:id/chat/retry", rateLimitMiddleware, async (c) => {
       emit,
       modelConfig,
       model,
-      creditConfig,
     });
   });
 

@@ -11,18 +11,15 @@ import {
   updateSession,
   updateSessionCompaction,
 } from "../db/queries/sessions.js";
-import { authMiddleware } from "../middleware/auth.js";
 import { badRequest, forbidden, notFound } from "../middleware/error-handler.js";
 
 const createSessionSchema = z.object({
   title: z.string().optional(),
-  modelTier: z.string().default("pro"),
   systemPrompt: z.string().optional(),
 });
 
 const updateSessionSchema = z.object({
   title: z.string().optional(),
-  modelTier: z.string().optional(),
   systemPrompt: z.string().optional(),
 });
 
@@ -36,8 +33,6 @@ const compactSessionSchema = z.object({
 });
 
 export const sessionRoutes = new Hono<AppEnv>();
-
-sessionRoutes.use("/*", authMiddleware);
 
 sessionRoutes.get("/list", async (c) => {
   const db = c.var.db;
@@ -55,7 +50,6 @@ sessionRoutes.post("/create", async (c) => {
   const session = await insertSession(db, {
     userId: c.var.userId,
     title: body.title,
-    modelTier: body.modelTier,
     systemPrompt: body.systemPrompt,
   });
 

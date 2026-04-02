@@ -32,7 +32,7 @@ export const useSessionListLogic = () => {
     : sessions;
 
   const createSessionMutation = useMutation({
-    mutationFn: async (input: { title?: string; modelTier?: string; systemPrompt?: string }) => {
+    mutationFn: async (input: { title?: string; systemPrompt?: string }) => {
       const { data } = await apiClient.post<{ session: Session }>("/sessions/create", input);
       return data.session;
     },

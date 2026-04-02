@@ -1,39 +1,26 @@
 import type { MiddlewareHandler } from "hono";
-import { ensureCreditBalance } from "../db/queries/credits.js";
-import {
-  findTierRateLimits,
-  getMinuteRequestCount,
-  logMinuteRequest,
-} from "../db/queries/rate-limits.js";
+import { getMinuteRequestCount, logMinuteRequest } from "../db/queries/rate-limits.js";
 import { HttpError } from "./error-handler.js";
+
+const DEFAULT_REQUESTS_PER_MINUTE = 20;
 
 /**
  * Rate limit middleware for chat endpoints.
- * Checks per-minute request limit and credit balance.
- * Should be applied AFTER authMiddleware (needs userId and userTier).
+ * Checks per-minute request limit.
+ * Should be applied AFTER authMiddleware (needs userId).
  */
 export const rateLimitMiddleware: MiddlewareHandler = async (c, next) => {
-  const db = c.var.db;
-  const userId = c.get("userId") as string;
-  const userTier = c.get("userTier") as string;
-
-  const limits = await findTierRateLimits(db, userTier);
-
-  // Check per-minute limit
-  if (limits) {
-    const minuteCount = await getMinuteRequestCount(db, userId);
-    if (minuteCount >= limits.requestsPerMinute) {
-      throw new HttpError(429, "Rate limit exceeded: too many requests per minute");
-    }
+  // Skip rate limiting in development
+  if (process.env.NODE_ENV !== "production") {
+    return next();
   }
 
-  // Check credit balance
-  const creditBalance = await ensureCreditBalance(db, userId, userTier);
-  if (creditBalance && creditBalance.balance <= 0) {
-    throw new HttpError(
-      429,
-      "You have run out of credits for this billing period. Upgrade your plan or wait for your credits to reset.",
-    );
+  const db = c.var.db;
+  const userId = c.get("userId") as string;
+
+  const minuteCount = await getMinuteRequestCount(db, userId);
+  if (minuteCount >= DEFAULT_REQUESTS_PER_MINUTE) {
+    throw new HttpError(429, "Rate limit exceeded: too many requests per minute");
   }
 
   // Log this request for minute tracking

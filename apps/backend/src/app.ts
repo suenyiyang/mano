@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { createDb, type Db } from "./db/index.js";
 import { getEnv } from "./env.js";
+import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { requestId } from "./middleware/request-id.js";
 import { attachmentRoutes } from "./routes/attachments.js";
@@ -11,14 +12,11 @@ import { mcpServerRoutes } from "./routes/mcp-servers.js";
 import { messageRoutes } from "./routes/messages.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { skillRoutes } from "./routes/skills.js";
-import { subscriptionRoutes } from "./routes/subscriptions.js";
-import { webhookRoutes } from "./routes/webhooks.js";
 
 export type AppEnv = {
   Variables: {
     db: Db;
     userId: string;
-    userTier: string;
   };
 };
 
@@ -38,6 +36,9 @@ app.use("/api/*", async (c, next) => {
   await next();
 });
 
+// Auth middleware for session routes — applied once for all sub-routers
+app.use("/api/sessions/*", authMiddleware);
+
 // Routes
 app.route("/api", healthRoutes);
 app.route("/api/auth", authRoutes);
@@ -47,8 +48,6 @@ app.route("/api/sessions", chatRoutes);
 app.route("/api/attachments", attachmentRoutes);
 app.route("/api/skills", skillRoutes);
 app.route("/api/mcp-servers", mcpServerRoutes);
-app.route("/api/subscriptions", subscriptionRoutes);
-app.route("/api/webhooks", webhookRoutes);
 
 app.get("/", (c) => c.json({ message: "Mano API" }));
 

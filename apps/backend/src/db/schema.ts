@@ -20,8 +20,6 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash"),
   displayName: text("display_name").notNull(),
   avatarUrl: text("avatar_url"),
-  tier: text().notNull().default("free"),
-  stripeCustomerId: text("stripe_customer_id").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -56,7 +54,6 @@ export const authSessions = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    userTier: text("user_tier").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -74,7 +71,6 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: text(),
     systemPrompt: text("system_prompt").notNull().default(""),
-    modelTier: text("model_tier").notNull().default("pro"),
     forkedFromSessionId: uuid("forked_from_session_id"),
     forkedAtMessageId: uuid("forked_at_message_id"),
     compactSummary: text("compact_summary"),
@@ -237,7 +233,6 @@ export const mcpServers = pgTable(
 export const modelTiers = pgTable(
   "model_tiers",
   {
-    tier: text().notNull(),
     provider: text().notNull(),
     apiModelId: text("api_model_id").notNull(),
     displayName: text("display_name").notNull(),
@@ -245,17 +240,8 @@ export const modelTiers = pgTable(
     isEnabled: boolean("is_enabled").notNull().default(true),
     config: jsonb().notNull().default({}),
   },
-  (t) => [primaryKey({ columns: [t.tier, t.provider, t.apiModelId] })],
+  (t) => [primaryKey({ columns: [t.provider, t.apiModelId] })],
 );
-
-// ─── Tier Rate Limits ───────────────────────────────────────────────────────
-
-export const tierRateLimits = pgTable("tier_rate_limits", {
-  tier: text().primaryKey(),
-  requestsPerMinute: integer("requests_per_minute").notNull(),
-  requestsPerDay: integer("requests_per_day").notNull(),
-  tokensPerDay: integer("tokens_per_day").notNull(),
-});
 
 // ─── Rate Limit Usage Tracking ─────────────────────────────────────────────
 
@@ -289,86 +275,4 @@ export const rateLimitMinuteLog = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("idx_rate_limit_minute").on(t.userId, t.createdAt)],
-);
-
-// ─── Subscriptions ─────────────────────────────────────────────────────────
-
-export const subscriptions = pgTable(
-  "subscriptions",
-  {
-    id: uuid().primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .unique()
-      .references(() => users.id, { onDelete: "cascade" }),
-    stripeCustomerId: text("stripe_customer_id").notNull(),
-    stripeSubscriptionId: text("stripe_subscription_id").unique(),
-    stripePriceId: text("stripe_price_id"),
-    tier: text().notNull().default("free"),
-    status: text().notNull().default("active"),
-    currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
-    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
-    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    index("idx_subscriptions_stripe_customer").on(t.stripeCustomerId),
-    index("idx_subscriptions_stripe_sub").on(t.stripeSubscriptionId),
-  ],
-);
-
-// ─── Credit Balances ───────────────────────────────────────────────────────
-
-export const creditBalances = pgTable("credit_balances", {
-  id: uuid().primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .unique()
-    .references(() => users.id, { onDelete: "cascade" }),
-  balance: integer().notNull().default(0),
-  monthlyAllowance: integer("monthly_allowance").notNull().default(0),
-  periodStart: timestamp("period_start", { withTimezone: true }),
-  periodEnd: timestamp("period_end", { withTimezone: true }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ─── Credit Transactions ───────────────────────────────────────────────────
-
-export const creditTransactions = pgTable(
-  "credit_transactions",
-  {
-    id: uuid().primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    amount: integer().notNull(),
-    type: text().notNull(),
-    description: text(),
-    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
-    modelId: text("model_id"),
-    balanceAfter: integer("balance_after").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("idx_credit_transactions_user").on(t.userId, t.createdAt)],
-);
-
-// ─── Payment History ───────────────────────────────────────────────────────
-
-export const paymentHistory = pgTable(
-  "payment_history",
-  {
-    id: uuid().primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    stripeInvoiceId: text("stripe_invoice_id").unique(),
-    amountCents: integer("amount_cents").notNull(),
-    currency: text().notNull().default("usd"),
-    status: text().notNull(),
-    tier: text().notNull(),
-    paidAt: timestamp("paid_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("idx_payment_history_user").on(t.userId, t.createdAt)],
 );

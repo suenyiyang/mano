@@ -160,7 +160,7 @@ test.describe("Session page (/app/:sessionId)", () => {
               userId: "user-1",
               title: "Test Session",
               systemPrompt: "",
-              modelTier: "pro",
+
               createdAt: "2025-01-01T00:00:00Z",
               updatedAt: "2025-01-01T00:00:00Z",
             },
@@ -169,7 +169,7 @@ test.describe("Session page (/app/:sessionId)", () => {
               userId: "user-1",
               title: "Second Session",
               systemPrompt: "",
-              modelTier: "pro",
+
               createdAt: "2025-01-02T00:00:00Z",
               updatedAt: "2025-01-02T00:00:00Z",
             },

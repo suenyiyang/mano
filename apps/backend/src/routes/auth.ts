@@ -43,11 +43,11 @@ authRoutes.post("/register", async (c) => {
     displayName: body.displayName,
   });
 
-  await createSessionAndSetCookie(c, db, user.id, user.tier);
+  await createSessionAndSetCookie(c, db, user.id);
 
   return c.json(
     {
-      user: { id: user.id, email: user.email, displayName: user.displayName, tier: user.tier },
+      user: { id: user.id, email: user.email, displayName: user.displayName },
     },
     201,
   );
@@ -67,10 +67,10 @@ authRoutes.post("/login", async (c) => {
     throw unauthorized("Invalid email or password");
   }
 
-  await createSessionAndSetCookie(c, db, user.id, user.tier);
+  await createSessionAndSetCookie(c, db, user.id);
 
   return c.json({
-    user: { id: user.id, email: user.email, displayName: user.displayName, tier: user.tier },
+    user: { id: user.id, email: user.email, displayName: user.displayName },
   });
 });
 
@@ -97,7 +97,6 @@ authRoutes.get("/me", authMiddleware, async (c) => {
       email: user.email,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      tier: user.tier,
     },
   });
 });
@@ -186,7 +185,7 @@ authRoutes.get("/github/callback", async (c) => {
     });
   }
 
-  await createSessionAndSetCookie(c, db, user.id, user.tier);
+  await createSessionAndSetCookie(c, db, user.id);
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
   return c.redirect(`${frontendUrl}/auth/callback`);
@@ -254,7 +253,7 @@ authRoutes.get("/google/callback", async (c) => {
     });
   }
 
-  await createSessionAndSetCookie(c, db, user.id, user.tier);
+  await createSessionAndSetCookie(c, db, user.id);
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
   return c.redirect(`${frontendUrl}/auth/callback`);

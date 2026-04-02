@@ -1,11 +1,6 @@
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 import type { Db } from "../index.js";
-import { rateLimitMinuteLog, rateLimitUsage, tierRateLimits } from "../schema.js";
-
-export const findTierRateLimits = async (db: Db, tier: string) => {
-  const rows = await db.select().from(tierRateLimits).where(eq(tierRateLimits.tier, tier)).limit(1);
-  return rows[0] ?? null;
-};
+import { rateLimitMinuteLog, rateLimitUsage } from "../schema.js";
 
 const getToday = () => {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD

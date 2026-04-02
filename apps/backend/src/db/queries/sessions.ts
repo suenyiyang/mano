@@ -33,7 +33,6 @@ export const insertSession = async (
     userId: string;
     title?: string;
     systemPrompt?: string;
-    modelTier?: string;
     forkedFromSessionId?: string;
     forkedAtMessageId?: string;
   },
@@ -44,7 +43,6 @@ export const insertSession = async (
       userId: input.userId,
       title: input.title,
       systemPrompt: input.systemPrompt ?? "",
-      modelTier: input.modelTier ?? "pro",
       forkedFromSessionId: input.forkedFromSessionId,
       forkedAtMessageId: input.forkedAtMessageId,
     })
@@ -58,7 +56,6 @@ export const updateSession = async (
   input: {
     title?: string;
     systemPrompt?: string;
-    modelTier?: string;
     compactSummary?: string;
     compactAfterMessageId?: string;
   },
@@ -111,7 +108,6 @@ export const forkSession = async (db: Db, sessionId: string, afterMessageId: str
         userId: original[0].userId,
         title: original[0].title ? `${original[0].title} (fork)` : null,
         systemPrompt: original[0].systemPrompt,
-        modelTier: original[0].modelTier,
         forkedFromSessionId: sessionId,
         forkedAtMessageId: afterMessageId,
       })

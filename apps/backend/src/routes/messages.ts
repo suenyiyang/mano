@@ -7,12 +7,9 @@ import {
 } from "../db/queries/message-feedback.js";
 import { findMessagesBySession } from "../db/queries/messages.js";
 import { findSessionById } from "../db/queries/sessions.js";
-import { authMiddleware } from "../middleware/auth.js";
 import { forbidden, notFound } from "../middleware/error-handler.js";
 
 export const messageRoutes = new Hono<AppEnv>();
-
-messageRoutes.use("/*", authMiddleware);
 
 messageRoutes.get("/:id/messages/list", async (c) => {
   const db = c.var.db;

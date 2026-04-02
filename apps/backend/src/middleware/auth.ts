@@ -28,7 +28,6 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
   }
 
   c.set("userId", session.userId);
-  c.set("userTier", session.userTier);
 
   // Sliding window: extend if less than 15 days remaining
   const remainingMs = session.expiresAt.getTime() - Date.now();

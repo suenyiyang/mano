@@ -5,17 +5,11 @@ import { authSessions } from "../schema.js";
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-export const createAuthSession = async (
-  db: Db,
-  { userId, userTier }: { userId: string; userTier: string },
-) => {
+export const createAuthSession = async (db: Db, { userId }: { userId: string }) => {
   const id = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
 
-  const [session] = await db
-    .insert(authSessions)
-    .values({ id, userId, userTier, expiresAt })
-    .returning();
+  const [session] = await db.insert(authSessions).values({ id, userId, expiresAt }).returning();
   return session;
 };
 
@@ -45,8 +39,4 @@ export const extendAuthSession = async (db: Db, sessionId: string, newExpiresAt:
 
 export const deleteExpiredAuthSessions = async (db: Db) => {
   await db.delete(authSessions).where(lt(authSessions.expiresAt, new Date()));
-};
-
-export const updateAuthSessionsTier = async (db: Db, userId: string, newTier: string) => {
-  await db.update(authSessions).set({ userTier: newTier }).where(eq(authSessions.userId, userId));
 };

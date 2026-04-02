@@ -63,7 +63,7 @@ test.describe("New chat page (/app)", () => {
             userId: "user-1",
             title: null,
             systemPrompt: "",
-            modelTier: "pro",
+
             forkedFromSessionId: null,
             forkedAtMessageId: null,
             compactSummary: null,
@@ -86,7 +86,7 @@ test.describe("New chat page (/app)", () => {
             userId: "user-1",
             title: null,
             systemPrompt: "",
-            modelTier: "pro",
+
             forkedFromSessionId: null,
             forkedAtMessageId: null,
             compactSummary: null,

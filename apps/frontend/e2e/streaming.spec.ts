@@ -88,7 +88,6 @@ test.describe("Initial message from new chat", () => {
             userId: "user-1",
             title: null,
             systemPrompt: "",
-            modelTier: "pro",
             forkedFromSessionId: null,
             forkedAtMessageId: null,
             compactSummary: null,

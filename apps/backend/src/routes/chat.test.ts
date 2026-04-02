@@ -11,7 +11,6 @@ vi.mock("../middleware/auth.js", () => ({
   authMiddleware: vi.fn(
     async (c: { set: (k: string, v: string) => void }, next: () => Promise<void>) => {
       c.set("userId", TEST_USER_ID);
-      c.set("userTier", "pro");
       await next();
     },
   ),
@@ -28,7 +27,6 @@ const mockSession = {
   userId: TEST_USER_ID,
   title: "Test",
   systemPrompt: "",
-  modelTier: "pro",
 };
 
 const mockGeneration = {
@@ -78,20 +76,14 @@ vi.mock("../lib/model-config.js", () => ({
 }));
 
 vi.mock("../db/queries/model-tiers.js", () => ({
-  selectModelForTier: vi.fn(async () => ({
-    tier: "pro",
+  selectModel: vi.fn(async () => ({
     provider: "openai",
     apiModelId: "gpt-4o",
     displayName: "GPT-4o",
     weight: 1,
     isEnabled: true,
-    config: { creditsPerMillionInputTokens: 3, creditsPerMillionOutputTokens: 10 },
+    config: {},
   })),
-}));
-
-vi.mock("../db/queries/credits.js", () => ({
-  calculateCreditCost: vi.fn(() => 0),
-  deductCredits: vi.fn(async () => 0),
 }));
 
 vi.mock("../db/queries/sse-events.js", () => ({
@@ -119,6 +111,7 @@ vi.mock("../lib/sse.js", () => ({
 
 const createTestApp = async () => {
   const { chatRoutes } = await import("./chat.js");
+  const { authMiddleware } = await import("../middleware/auth.js");
   const app = new Hono<AppEnv>();
   app.onError((error, c) => {
     if ("status" in error && typeof (error as { status: unknown }).status === "number") {
@@ -136,6 +129,7 @@ const createTestApp = async () => {
     c.set("db", {} as never);
     await next();
   });
+  app.use("/api/sessions/*", authMiddleware);
   app.route("/api/sessions", chatRoutes);
   return app;
 };

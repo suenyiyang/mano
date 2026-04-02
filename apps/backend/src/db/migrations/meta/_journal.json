@@ -43,6 +43,13 @@
       "when": 1775138400000,
       "tag": "0005_seed_tiers_and_credits",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775144451116,
+      "tag": "0006_narrow_phil_sheldon",
+      "breakpoints": true
     }
   ]
 }

@@ -240,9 +240,6 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
         const responseId = data.responseId;
         dispatch({ type: "RESPONSE_START", responseId });
 
-        let receivedDone = false;
-        let receivedAskUser = false;
-
         await createSseClient({
           url: `/api/sessions/${props.sessionId}/chat/${responseId}/resume`,
           method: "GET",
@@ -251,9 +248,6 @@ export const useSessionPageLogic = (props: UseSessionPageLogicProps) => {
             try {
               const parsed = JSON.parse(eventData);
               const event = { ...parsed, type: eventType } as SseEvent;
-
-              if (event.type === "done") receivedDone = true;
-              if (event.type === "ask_user") receivedAskUser = true;
 
               if (event.type === "session_update") {
                 queryClient.setQueryData(["session", props.sessionId], event.session);

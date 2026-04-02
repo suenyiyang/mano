@@ -35,13 +35,8 @@ export const getSessionCookie = (c: Context): string | undefined => {
   return getCookie(c, SESSION_COOKIE);
 };
 
-export const createSessionAndSetCookie = async (
-  c: Context,
-  db: Db,
-  userId: string,
-  userTier: string,
-) => {
-  const session = await createAuthSession(db, { userId, userTier });
+export const createSessionAndSetCookie = async (c: Context, db: Db, userId: string) => {
+  const session = await createAuthSession(db, { userId });
   setSessionCookie(c, session.id);
   return session;
 };

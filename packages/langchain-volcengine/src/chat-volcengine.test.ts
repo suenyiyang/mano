@@ -485,6 +485,55 @@ describe("ChatVolcengine", () => {
       ]);
     });
 
+    it("yields usage from final chunk with empty choices", async () => {
+      const streamChunks: VolcengineChatCompletionChunk[] = [
+        {
+          id: "chunk-usage-1",
+          object: "chat.completion.chunk",
+          created: 1700000000,
+          model: "doubao-seed-2-0-pro-260215",
+          choices: [
+            {
+              index: 0,
+              delta: { role: "assistant", content: "Hi!" },
+              finish_reason: "stop",
+            },
+          ],
+        },
+        {
+          id: "chunk-usage-1",
+          object: "chat.completion.chunk",
+          created: 1700000000,
+          model: "doubao-seed-2-0-pro-260215",
+          choices: [],
+          usage: {
+            prompt_tokens: 10,
+            completion_tokens: 5,
+            total_tokens: 15,
+          },
+        },
+      ];
+
+      fetchSpy.mockResolvedValue(createMockSSEResponse(streamChunks));
+
+      const model = createModel();
+      const allChunks: AIMessageChunk[] = [];
+
+      for await (const chunk of model._streamResponseChunks([new HumanMessage("Hi")], {})) {
+        allChunks.push(chunk.message as AIMessageChunk);
+      }
+
+      expect(allChunks).toHaveLength(2);
+      // The second chunk should carry usage metadata
+      expect(allChunks[1].usage_metadata).toEqual({
+        input_tokens: 10,
+        output_tokens: 5,
+        total_tokens: 15,
+        input_token_details: undefined,
+        output_token_details: undefined,
+      });
+    });
+
     it("throws on HTTP error in stream", async () => {
       fetchSpy.mockResolvedValue(new Response("Internal Server Error", { status: 500 }));
 
@@ -837,6 +886,37 @@ describe("ChatVolcengine", () => {
           item.type === "function_call" || item.type === "function_call_output",
       );
       expect(hasOpenAIItems).toBe(false);
+    });
+
+    it("strips reasoning_content from input messages", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify(RESPONSES_BASIC), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+      const model = createModel({ useResponsesApi: true });
+      await model._generate(
+        [
+          new HumanMessage("Think about this"),
+          new AIMessage({
+            content: "The answer is 42.",
+            additional_kwargs: { reasoning_content: "Let me think step by step..." },
+          }),
+          new HumanMessage("Thanks, now explain more"),
+        ],
+        {},
+      );
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      const input = body.input;
+
+      expect(input[1]).toEqual({
+        role: "assistant",
+        content: "The answer is 42.",
+      });
+      expect(input[1]).not.toHaveProperty("reasoning_content");
     });
   });
 

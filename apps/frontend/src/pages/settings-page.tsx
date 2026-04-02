@@ -6,14 +6,12 @@ import { useSidebar } from "../contexts/sidebar-context.js";
 import { cn } from "../lib/utils.js";
 import { McpServersPage } from "./settings/mcp-servers-page.js";
 import { SkillsPage } from "./settings/skills-page.js";
-import { SubscriptionPage } from "./settings/subscription-page.js";
 
-type Tab = "subscription" | "skills" | "mcp-servers";
+type Tab = "skills" | "mcp-servers";
 
-const TAB_IDS: Tab[] = ["subscription", "skills", "mcp-servers"];
+const TAB_IDS: Tab[] = ["skills", "mcp-servers"];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
-  subscription: "settings.tabSubscription",
   skills: "settings.tabSkills",
   "mcp-servers": "settings.tabMcpServers",
 };
@@ -26,7 +24,7 @@ export const SettingsPage: FC = () => {
 
   const tabParam = searchParams.get("tab") as Tab | null;
   const [activeTab, setActiveTab] = useState<Tab>(
-    tabParam && TAB_IDS.includes(tabParam) ? tabParam : "subscription",
+    tabParam && TAB_IDS.includes(tabParam) ? tabParam : "skills",
   );
 
   // Sync tab from URL query param
@@ -79,7 +77,6 @@ export const SettingsPage: FC = () => {
             ))}
           </div>
 
-          {activeTab === "subscription" && <SubscriptionPage />}
           {activeTab === "skills" && <SkillsPage />}
           {activeTab === "mcp-servers" && <McpServersPage />}
         </div>

@@ -81,7 +81,6 @@ test.describe("Sidebar", () => {
             userId: "user-1",
             title: "Existing session",
             systemPrompt: "",
-            modelTier: "pro",
           },
         }),
       }),

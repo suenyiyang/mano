@@ -11,7 +11,10 @@ import { ChatGenerationChunk, type ChatResult } from "@langchain/core/outputs";
 import type { Runnable } from "@langchain/core/runnables";
 import { convertVolcengineDeltaToAIMessageChunk } from "./converters/delta-to-chunk.js";
 import { convertMessagesToVolcengineParams } from "./converters/messages-to-params.js";
-import { convertVolcengineResponseToAIMessage } from "./converters/response-to-message.js";
+import {
+  buildUsageMetadata,
+  convertVolcengineResponseToAIMessage,
+} from "./converters/response-to-message.js";
 import { convertResponsesOutputToAIMessage } from "./converters/responses-output-to-message.js";
 import type {
   ChatVolcengineCallOptions,
@@ -183,7 +186,17 @@ export class ChatVolcengine extends BaseChatModel<ChatVolcengineCallOptions> {
 
     for await (const chunk of parseSSEStream(response)) {
       const choice = chunk.choices[0];
-      if (!choice) continue;
+      if (!choice) {
+        // Final chunk may carry usage data with empty choices
+        if (chunk.usage) {
+          const usageChunk = new AIMessageChunk({
+            content: "",
+            usage_metadata: buildUsageMetadata(chunk.usage),
+          });
+          yield new ChatGenerationChunk({ message: usageChunk, text: "" });
+        }
+        continue;
+      }
 
       const messageChunk = convertVolcengineDeltaToAIMessageChunk(
         choice.delta,
@@ -487,7 +500,14 @@ export class ChatVolcengine extends BaseChatModel<ChatVolcengineCallOptions> {
     // Volcengine Responses API uses the same role-based message format as Chat
     // Completions (every item has `content`), unlike OpenAI's Responses API which
     // uses separate function_call / function_call_output item types.
-    const inputMessages = convertMessagesToVolcengineParams(messages);
+    // Strip reasoning_content — the Responses API does not accept it in input messages.
+    const inputMessages = convertMessagesToVolcengineParams(messages).map((msg) => {
+      if (msg.role === "assistant" && "reasoning_content" in msg) {
+        const { reasoning_content, ...rest } = msg;
+        return rest;
+      }
+      return msg;
+    });
 
     const body: VolcengineResponsesRequest = {
       model: this.model,

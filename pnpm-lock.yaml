@@ -104,9 +104,6 @@ importers:
       postgres:
         specifier: ^3.4.8
         version: 3.4.8
-      stripe:
-        specifier: ^21.0.1
-        version: 21.0.1(@types/node@22.19.15)
       zod:
         specifier: 'catalog:'
         version: 3.25.76
@@ -2786,15 +2783,6 @@ packages:
   stringify-entities@4.0.4:
     resolution: {integrity: sha512-IwfBptatlO+QCJUo19AqvrPNqlVMpW9YEL2LIVY+Rpv2qsjCGxaDLNRgeGsQWJhfItebuJhsGSLjaBbNSQ+ieg==}
 
-  stripe@21.0.1:
-    resolution: {integrity: sha512-ocv0j7dWttswDWV2XL/kb6+yiLpDXNXL3RQAOB5OB2kr49z0cEatdQc12+zP/j5nrXk6rAsT4N3y/NUvBbK7Pw==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      '@types/node': '>=18'
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
-
   style-to-js@1.1.21:
     resolution: {integrity: sha512-RjQetxJrrUJLQPHbLku6U/ocGtzyjbJMP9lCNK7Ag0CNh690nSH8woqWH9u16nMjYBAok+i7JO1NP2pOy8IsPQ==}
 
@@ -5473,10 +5461,6 @@ snapshots:
     dependencies:
       character-entities-html4: 2.1.0
       character-entities-legacy: 3.0.0
-
-  stripe@21.0.1(@types/node@22.19.15):
-    optionalDependencies:
-      '@types/node': 22.19.15
 
   style-to-js@1.1.21:
     dependencies:
